@@ -22,18 +22,19 @@ jobs:
       - name: Core tests
         run: dotnet run --project BisonTime.Tests -c Release
 
-      - name: Publish single-file exe
+      # Not single-file and not compressed: a self-extracting packed exe is the classic
+      # antivirus false positive (Wacatac & co). A plain folder of signed .NET DLLs is not.
+      - name: Publish
         run: >
           dotnet publish BisonTime.App/BisonTime.App.csproj -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-          -o out
+          -p:PublishSingleFile=false -p:DebugType=none -o out/BisonTimeChecker
 
       - name: Pack
         shell: pwsh
         run: |
           $v = (Select-Xml -Path BisonTime.App/BisonTime.App.csproj -XPath "//Version").Node.InnerText
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path out/BisonTimeChecker.exe -DestinationPath "dist/BisonTimeChecker-$v-win-x64.zip"
+          Compress-Archive -Path out/BisonTimeChecker -DestinationPath "dist/BisonTimeChecker-$v-win-x64.zip"
           "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - uses: actions/upload-artifact@v4

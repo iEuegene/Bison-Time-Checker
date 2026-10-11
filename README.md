@@ -36,7 +36,7 @@
 ## Встановлення
 
 1. Завантаж `BisonTimeChecker-…-win-x64.zip` з [Releases](https://github.com/iEuegene/Bison-Time-Checker/releases).
-2. Розпакуй `BisonTimeChecker.exe` у постійну папку й запусти. .NET ставити не треба, все вже всередині exe.
+2. Розпакуй папку `BisonTimeChecker` у постійне місце й запусти `BisonTimeChecker.exe`. .NET ставити не треба: усе потрібне лежить у папці.
 3. SmartScreen може попередити про невідомого видавця: «Докладніше» → «Виконати в будь-якому разі».
 
 ## Розробка
@@ -53,7 +53,7 @@ tools/make-icons.py   іконки (паралелограм Inweb, BT / пау�
 Локально на Windows:
 
 ```
-dotnet publish BisonTime.App -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+dotnet publish BisonTime.App -c Release -r win-x64 --self-contained -o out/BisonTimeChecker
 ```
 
 Шрифти Geist та Unbounded розповсюджуються за ліцензією SIL OFL.
