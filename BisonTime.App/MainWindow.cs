@@ -185,6 +185,7 @@ internal sealed class MainWindow : Window
         void Add(UIElement? e) { if (e is FrameworkElement fe) { fe.Margin = new Thickness(0, 0, 0, 8); _body.Children.Add(fe); } }
 
         Add(PauseBar());
+        Add(UpdateBar());
         foreach (var it in _file.State.Idle.ToList()) Add(IdleBanner(it));
         foreach (var p in _report.Projects) Add(ProjectCard(p));
         if (_report.Projects.Count == 0)
@@ -213,6 +214,16 @@ internal sealed class MainWindow : Window
         var pause = Btn("❚❚  Пауза", "Ghost", () => App.Instance.TogglePause(), "Пауза (Alt+Shift+P)");
         pause.Padding = new Thickness(14, 8, 14, 8);
         return Card(Cols("Auto,*,Auto", dot, label.M(10, 0, 8, 0), pause), "SideBrush", "LineBrush", 8);
+    }
+
+    UIElement? UpdateBar()
+    {
+        if (_day != Today || App.Instance.Update is not { } u) return null;
+        var text = Col(2,
+            T($"Нова версія {u.Manifest.Version}", 13, weight: FontWeights.SemiBold),
+            T($"{u.Changed.Count} файлів · {Updater.Size(u.Bytes)} · дані не зачіпаються", 12, "MutedBrush"));
+        var btn = Btn("Оновити", "Primary", () => { Hide(); App.Instance.ShowSettings(5); });
+        return Card(Cols("*,Auto", text, btn.M(10, 0, 0, 0)), "CardBrush", "LineBrush", 10);
     }
 
     UIElement IdleBanner(IdleItem it)

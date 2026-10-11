@@ -20,6 +20,7 @@ internal sealed class SettingsWindow : Window
     readonly StackPanel _nav = new() { Margin = new Thickness(0, 22, 0, 0) };
     readonly StackPanel _page = new() { Margin = new Thickness(36, 30, 36, 30), MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left };
     Settings _s = new();
+    UpdatePanel? _update;
 
     public SettingsWindow()
     {
@@ -40,7 +41,7 @@ internal sealed class SettingsWindow : Window
         var logo = new Image { Source = new BitmapImage(new Uri("pack://application:,,,/Assets/bt-64.png")), Width = 40, Height = 40 };
         var brand = HRow(logo, Col(0, T("Bison Time", 13, display: true, weight: FontWeights.Bold), T("Checker", 13, display: true, weight: FontWeights.Bold),
             T($"v{typeof(App).Assembly.GetName().Version?.ToString(3)}", 12, "MutedBrush")).M(10, 0, 0, 0));
-        var note = T("Усе зберігається лише на цьому комп'ютері. BT не робить жодного мережевого запиту.", 12, "FaintBrush", wrap: true);
+        var note = T("Усе зберігається лише на цьому комп'ютері. В інтернет BT ходить лише по оновлення на GitHub і нічого не надсилає.", 12, "FaintBrush", wrap: true);
         var side = new DockPanel { Margin = new Thickness(14, 22, 14, 18), LastChildFill = true };
         DockPanel.SetDock(brand, Dock.Top);
         DockPanel.SetDock(note, Dock.Bottom);
@@ -51,6 +52,7 @@ internal sealed class SettingsWindow : Window
 
         var scroll = new ScrollViewer { Content = _page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Content = Cols("240,*", sideBox, scroll);
+        Closed += (_, _) => _update?.Detach();
         Render();
     }
 
@@ -249,6 +251,7 @@ internal sealed class SettingsWindow : Window
         var steps = HRow(new[] { 1, 5, 10, 15 }.Select(n =>
             (UIElement)Btn(n == 1 ? "до хвилини" : $"до {n} хв", _s.RoundStep == n ? "Primary" : "Ghost", () => Save(s => s.RoundStep = n)).M(0, 0, 6, 0)).ToArray());
         var auto = Toggle(_s.Autostart, on => { Save(s => s.Autostart = on); Autostart.Apply(on); });
+        var upd = Toggle(_s.AutoUpdateCheck, on => Save(s => s.AutoUpdateCheck = on));
 
         UIElement Field(string title, string help, FrameworkElement control) =>
             Cols("*,Auto", Col(3, T(title, 14, weight: FontWeights.Medium), T(help, 12, "MutedBrush", wrap: true)), control.M(16, 0, 0, 0));
@@ -257,6 +260,7 @@ internal sealed class SettingsWindow : Window
             Field("Простій, хв", "Без миші й клавіатури довше — облік на паузі, потім питання «додати чи викинути». Хвилини до цього моменту рахуються.", idle),
             Field("Округлення підсумку", "Лише підсумок проєкту. Кожен рядок рахується щонайменше як 1 хв.", steps),
             Field("Запускати з Windows", "BT стартує тихо в треї після входу в систему.", auto),
+            Field("Перевіряти оновлення щодня", "Раз на добу BT питає GitHub, чи є нова версія, і показує її в треї. Оновлення ставиться лише після твого кліку.", upd),
             Field("Пауза", "Alt+Shift+P з будь-якої програми або кнопка у вікні BT. Іконка в треї стає помаранчевою.", T("Alt+Shift+P", 13, "LimeBrush", FontWeights.SemiBold)),
         }, ""));
     }
@@ -293,14 +297,17 @@ internal sealed class SettingsWindow : Window
     {
         var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "";
         H1("Довідка", HelpContent.Made);
+        // The panel survives re-renders (a download keeps its progress): unhook it from the old card.
+        if (_update?.Parent is Border old) old.Child = null;
 
         // About: version, copyright, links
         _page.Children.Add(ListCard(new UIElement[]
         {
             Cols("*,Auto", Col(3, T($"Bison Time Checker {version}", 14, weight: FontWeights.SemiBold), T(HelpContent.Copyright + " · ліцензія MIT", 12, "MutedBrush")),
                 HRow(Btn("GitHub", "Ghost", () => Open(HelpContent.Repo), HelpContent.Repo),
-                     Btn("Оновлення", "Ghost", () => Open(HelpContent.Releases), "Нові версії на GitHub").M(6, 0, 0, 0),
+                     Btn("Релізи", "Ghost", () => Open(HelpContent.Releases), "Усі версії на GitHub").M(6, 0, 0, 0),
                      Btn("Повідомити про проблему", "Ghost", () => Open(HelpContent.Issues)).M(6, 0, 0, 0))),
+            _update ??= new UpdatePanel(),
         }, ""));
 
         foreach (var (title, lines) in HelpContent.Guide)

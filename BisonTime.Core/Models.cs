@@ -39,6 +39,10 @@ public sealed class Settings
     /// <summary>Title fragments of task managers serving every project (Planfix…).</summary>
     public List<string> WorkTools { get; set; } = new() { "Planfix", "Планувальник" };
     public bool Autostart { get; set; } = true;
+    /// <summary>Once a day ask GitHub Releases whether a newer version exists.</summary>
+    public bool AutoUpdateCheck { get; set; } = true;
+    /// <summary>Unix ms of the last automatic check.</summary>
+    public long LastUpdateCheck { get; set; }
 }
 
 /// <summary>Untracked stretch and why: focus | idle | lock | pause | sleep.</summary>

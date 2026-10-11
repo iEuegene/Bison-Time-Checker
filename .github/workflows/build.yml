@@ -7,7 +7,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # the release step publishes the exe on pushes to main
+  contents: write   # the release step publishes the app on pushes to main
+
+env:
+  # Pinned SDK = pinned .NET runtime inside the app folder, so an update ships only BT's own
+  # DLLs (~1 MB) instead of the whole runtime. Bump deliberately: that release is a big delta.
+  DOTNET_SDK: 8.0.410
+  BT_SIGNING_KEY: ${{ secrets.BT_SIGNING_KEY }}
 
 jobs:
   windows:
@@ -15,19 +21,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Pin .NET SDK
+        run: dotnet new globaljson --sdk-version ${{ env.DOTNET_SDK }} --roll-forward disable --force
+
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          global-json-file: global.json
 
       - name: Core tests
         run: dotnet run --project BisonTime.Tests -c Release
 
       # Not single-file and not compressed: a self-extracting packed exe is the classic
       # antivirus false positive (Wacatac & co). A plain folder of signed .NET DLLs is not.
+      # Deterministic build: unchanged sources give byte-identical files, so they are not re-downloaded.
       - name: Publish
         run: >
           dotnet publish BisonTime.App/BisonTime.App.csproj -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=false -p:DebugType=none -o out/BisonTimeChecker
+          -p:PublishSingleFile=false -p:DebugType=none -p:ContinuousIntegrationBuild=true -p:Deterministic=true
+          -o out/BisonTimeChecker
 
       - name: Pack
         shell: pwsh
@@ -37,11 +48,18 @@ jobs:
           Compress-Archive -Path out/BisonTimeChecker -DestinationPath "dist/BisonTimeChecker-$v-win-x64.zip"
           "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      # Signed manifest + content-addressed files for in-app delta updates.
+      - name: Update manifest
+        if: env.BT_SIGNING_KEY != ''
+        run: dotnet run --project tools/ReleaseTool -c Release -- publish out/BisonTimeChecker dist/update ${{ env.VERSION }} BisonTime.App/UpdateKey.cs
+
       - uses: actions/upload-artifact@v4
         with:
           name: BisonTimeChecker-${{ env.VERSION }}-win-x64
           path: dist/*.zip
 
+      # Signed builds become the "latest" release the app updates from. Without the signing key
+      # the release stays a prerelease, so the app never sees a version it cannot verify.
       - name: Release (main only)
         if: github.ref == 'refs/heads/main'
         env:
@@ -49,10 +67,26 @@ jobs:
         shell: pwsh
         run: |
           $tag = "v$env:VERSION"
-          $zip = (Get-ChildItem dist/*.zip).FullName
+          $assets = @((Get-ChildItem dist/*.zip).FullName)
+          $signed = Test-Path dist/update/manifest.json
+          if ($signed) {
+            $assets += (Get-ChildItem dist/update/files/*).FullName
+          }
           gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $zip --clobber
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --prerelease --title "Bison Time Checker $env:VERSION" --notes-file RELEASE_NOTES.md
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          # Files first, manifest last: a client never sees a manifest whose files are not there yet.
+          for ($i = 0; $i -lt $assets.Count; $i += 50) {
+            $batch = $assets[$i..([Math]::Min($i + 49, $assets.Count - 1))]
+            gh release upload $tag @batch --clobber
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          if ($signed) {
+            gh release upload $tag dist/update/manifest.json dist/update/manifest.json.sig --clobber
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+            gh release edit $tag --prerelease=false --latest
           } else {
-            gh release create $tag $zip --prerelease --title "Bison Time Checker $env:VERSION" --notes-file RELEASE_NOTES.md
+            Write-Host "::warning::BT_SIGNING_KEY is not set: released as prerelease without in-app update files"
           }

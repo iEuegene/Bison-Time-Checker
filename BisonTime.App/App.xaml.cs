@@ -33,8 +33,14 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        _single = new Mutex(true, @"Local\BisonTimeChecker.SingleInstance", out var first);
-        if (!first) { Shutdown(); return; }
+        _single = new Mutex(false, @"Local\BisonTimeChecker.SingleInstance");
+        // After an update the old copy is still shutting down: wait for it instead of quitting.
+        var wait = e.Args.Contains("--after-update") ? TimeSpan.FromSeconds(15) : TimeSpan.Zero;
+        bool owned;
+        try { owned = _single.WaitOne(wait); }
+        catch (AbandonedMutexException) { owned = true; }
+        if (!owned) { _single = null; Shutdown(); return; }
+        Updates.Cleanup(Updater.AppDir, Updater.DownloadDir);
 
         DispatcherUnhandledException += (_, ex) =>
         {
@@ -86,6 +92,51 @@ public partial class App : Application
             Tracker.Cleanup();
             _watcher.ResetCache();
         }
+        if (now - _lastUpdateCheck > 3600_000L)
+        {
+            _lastUpdateCheck = now;
+            _ = DailyUpdateCheck();
+        }
+    }
+
+    // ---- Updates ----
+
+    long _lastUpdateCheck = Environment.TickCount64 - 3600_000L + 60_000L; // first check a minute after start
+    bool _balloonShown;
+
+    /// <summary>Newer release found by the last check (daily or manual); null when up to date or unknown.</summary>
+    public Updater.Available? Update { get; private set; }
+    public event Action? UpdateChanged;
+
+    public void SetUpdate(Updater.Available? a)
+    {
+        Update = a;
+        UpdateChanged?.Invoke();
+    }
+
+    async Task DailyUpdateCheck()
+    {
+        var s = Store.LoadSettings();
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (!s.AutoUpdateCheck || nowMs - s.LastUpdateCheck < 24 * 3600_000L) return;
+        try
+        {
+            var a = await Updater.CheckAsync();
+            s = Store.LoadSettings();
+            s.LastUpdateCheck = nowMs;
+            Store.SaveSettings(s);
+            SetUpdate(a);
+            if (a != null && !_balloonShown)
+            {
+                _balloonShown = true;
+                _tray.ShowBalloonTip(8000, "Bison Time Checker", $"Доступна версія {a.Manifest.Version}. Оновити: Налаштування → Довідка.", WinForms.ToolTipIcon.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Offline or GitHub hiccup: try again next hour, quietly.
+            Store.Log(new LogEntry { T = nowMs, Ev = "update-check", Why = ex.Message });
+        }
     }
 
     // ---- Tray ----
@@ -111,6 +162,7 @@ public partial class App : Application
         menu.Items.Add("Вийти з Bison Time Checker", null, (_, _) => Shutdown());
         _tray = new WinForms.NotifyIcon { Icon = _iconNormal, Visible = true, Text = "Bison Time Checker", ContextMenuStrip = menu };
         _tray.MouseClick += (_, ev) => { if (ev.Button == WinForms.MouseButtons.Left) ToggleMain(); };
+        _tray.BalloonTipClicked += (_, _) => ShowSettings(5);
     }
 
     void UpdateTray()
@@ -194,6 +246,8 @@ public partial class App : Application
         try { Tracker?.Shutdown(); } catch { /* best effort */ }
         if (_hotkeyWindow != null) { Native.UnregisterHotKey(_hotkeyWindow.Handle, HotkeyId); _hotkeyWindow.Dispose(); }
         if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
+        // Release before the process ends so an updated copy waiting on it starts at once.
+        try { _single?.ReleaseMutex(); } catch { /* not owned */ }
         base.OnExit(e);
     }
 }

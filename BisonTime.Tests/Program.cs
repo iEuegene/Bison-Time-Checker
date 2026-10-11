@@ -328,5 +328,68 @@ Test("file store round-trips settings and days with Cyrillic", () =>
     Directory.Delete(dir, true);
 });
 
+// ---------------- updates ----------------
+string TmpDir() { var d = Path.Combine(Path.GetTempPath(), "bt-upd-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(d); return d; }
+Test("updates: signed manifest verifies; tampered bytes or another key do not", () =>
+{
+    var app = TmpDir();
+    File.WriteAllText(Path.Combine(app, "BisonTimeChecker.dll"), "v1");
+    Directory.CreateDirectory(Path.Combine(app, "uk"));
+    File.WriteAllText(Path.Combine(app, "uk", "res.dll"), "r");
+    var (pub, priv) = Updates.NewKeys();
+    var bytes = Updates.Serialize(Updates.Build(app, "1.2.0"));
+    var sig = Updates.Sign(bytes, priv);
+    var m = Updates.ParseVerified(bytes, sig, pub);
+    True(m != null, "valid"); Eq(2, m!.Files.Count); Eq("uk/res.dll", m.Files[1].Path);
+    var bad = (byte[])bytes.Clone(); bad[10] ^= 1;
+    True(Updates.ParseVerified(bad, sig, pub) == null, "tampered");
+    True(Updates.ParseVerified(bytes, sig, Updates.NewKeys().PublicKey) == null, "other key");
+    Directory.Delete(app, true);
+});
+Test("updates: unsafe paths are rejected even when signed", () =>
+{
+    var (pub, priv) = Updates.NewKeys();
+    foreach (var path in new[] { "../evil.dll", "C:/Windows/x.dll", "/etc/x", "a/../../b" })
+    {
+        var m = new UpdateManifest { Version = "9.9.9", Files = { new UpdateFile { Path = path, Size = 1, Sha256 = new string('a', 64) } } };
+        var b = Updates.Serialize(m);
+        True(Updates.ParseVerified(b, Updates.Sign(b, priv), pub) == null, path);
+    }
+});
+Test("updates: only changed or missing files are downloaded; swap and rollback", () =>
+{
+    var app = TmpDir(); var next = TmpDir(); var dl = TmpDir();
+    File.WriteAllText(Path.Combine(app, "a.dll"), "same");
+    File.WriteAllText(Path.Combine(app, "b.dll"), "old");
+    File.WriteAllText(Path.Combine(next, "a.dll"), "same");
+    File.WriteAllText(Path.Combine(next, "b.dll"), "new");
+    File.WriteAllText(Path.Combine(next, "c.dll"), "added");
+    var m = Updates.Build(next, "1.2.0");
+    var changed = Updates.Changed(m, app);
+    Eq("b.dll,c.dll", string.Join(",", changed.Select(f => f.Path)));
+    var items = changed.Select(f => { var t = Path.Combine(dl, f.Sha256); File.Copy(Path.Combine(next, f.Path), t); return (f, t); }).ToList();
+    Updates.Apply(app, items);
+    Eq("new", File.ReadAllText(Path.Combine(app, "b.dll"))); Eq("added", File.ReadAllText(Path.Combine(app, "c.dll")));
+    True(File.Exists(Path.Combine(app, "b.dll.old")), "old kept until cleanup");
+    Updates.Cleanup(app, dl);
+    True(!File.Exists(Path.Combine(app, "b.dll.old")) && !Directory.Exists(dl), "cleaned");
+    Eq(0, Updates.Changed(m, app).Count);
+
+    // a corrupted download aborts before anything is touched
+    File.WriteAllText(Path.Combine(next, "b.dll"), "newer");
+    var m2 = Updates.Build(next, "1.3.0");
+    var f2 = Updates.Changed(m2, app).Single();
+    var bad = Path.Combine(TmpDir(), "x"); File.WriteAllText(bad, "corrupt");
+    try { Updates.Apply(app, new[] { (f2, bad) }); throw new Exception("should fail"); } catch (InvalidDataException) { }
+    Eq("new", File.ReadAllText(Path.Combine(app, "b.dll")));
+    foreach (var d in new[] { app, next }) Directory.Delete(d, true);
+});
+Test("updates: version comparison", () =>
+{
+    True(Updates.IsNewer("1.10.0", "1.9.3"), "1.10 > 1.9");
+    True(!Updates.IsNewer("1.2.0", "1.2.0"), "same");
+    True(!Updates.IsNewer("garbage", "1.0.0"), "garbage");
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
