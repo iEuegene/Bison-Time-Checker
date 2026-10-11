@@ -101,6 +101,9 @@ function rulesTab() {
       h('button', { class: 'btn quiet', onclick: () => save((s) => { s.rules = s.rules.filter((_, j) => j !== i); }) }, 'Видалити'))) :
       h('div', { class: 'emptyp' }, 'Правил немає. Їх зручно створювати з попапу: перенеси запис з «Інше» в проєкт, і BT запропонує правило.')),
     h('div', { class: 'addrow' }, match, proj, h('button', { class: 'btn primary', onclick: add }, 'Додати правило')),
+    h('h1', { style: 'font-size:16px;margin-top:34px' }, 'Таск-менеджери'),
+    h('p', { class: 'lead' }, 'Сервіси, де ведуться задачі всіх проєктів. Сторінка з доменом клієнта в заголовку йде в цей проєкт. Сторінка без нього (планувальник, списки) — у проєкт, над яким ти працював у межах 15 хв до неї або після.'),
+    ...listEditor('workTools', 'planfix.com', 'Список порожній.'),
   ];
 }
 

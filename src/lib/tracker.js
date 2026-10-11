@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS = {
   rules: [],
   ignore: [],
   declined: [],
+  workTools: ['planfix.com'],
 };
 
 export function withDefaults(s) {

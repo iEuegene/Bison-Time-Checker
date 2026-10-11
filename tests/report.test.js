@@ -96,3 +96,26 @@ test('unknown domain over 15 min is suggested once, declined never', () => {
   assert.deepEqual(buildReport(segs, {}, settings).suggestions.map((s) => s.domain), ['newclient.ua']);
   assert.deepEqual(buildReport(segs, {}, { ...settings, declined: ['newclient.ua'] }).suggestions, []);
 });
+
+test('task manager page without a client goes to the project worked on around it', () => {
+  const s = { ...settings, workTools: ['planfix.com'] };
+  const PF = 'https://inweb.planfix.com/planner';
+  const r = buildReport([
+    seg(0, 20, DOC, DOC_T),
+    seg(20, 25, PF, 'Bison / Планувальник / inweb'),
+    seg(25, 30, DOC, DOC_T),
+  ], {}, s);
+  const p = r.projects[0];
+  assert.equal(p.rounded, 30);
+  assert.equal(p.groups.find((g) => g.id === 'linked').rows[0].label, 'planfix.com');
+  assert.equal(r.otherMs, 0);
+  // first thing in the morning: takes the project that follows
+  const r2 = buildReport([seg(0, 5, PF, 'Планувальник'), seg(6, 20, DOC, DOC_T)], {}, s);
+  assert.equal(r2.projects[0].rounded, 20);
+  // nothing within 15 min around: stays in Інше
+  const r3 = buildReport([seg(0, 5, PF, 'Планувальник'), seg(40, 50, DOC, DOC_T)], {}, s);
+  assert.equal(r3.otherMs, 5 * MIN);
+  // a generic site is never inferred
+  const r4 = buildReport([seg(0, 10, DOC, DOC_T), seg(10, 15, 'https://youtube.com/', 'x')], {}, s);
+  assert.equal(r4.otherMs, 5 * MIN);
+});

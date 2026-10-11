@@ -15,6 +15,38 @@ const COMMENT_MIN = 5 * MIN;      // a source enters the comment draft from 5 mi
 const SUGGEST_MIN = 15 * MIN;     // an unknown domain is offered as a project from 15 min a day
 const TOP_PAGES = 5;
 
+const CONTEXT_GAP = 15 * MIN;     // a task-manager page belongs to the project worked on within 15 min
+
+/**
+ * Task managers (Planfix…) serve every project. A page there that names no client goes to
+ * the project worked on right before it (or right after, if nothing came before).
+ */
+function inferFromContext(items, settings) {
+  const tools = (settings.workTools || []).map((d) => d.toLowerCase());
+  if (!tools.length) return;
+  const isTool = (c) => tools.some((d) => c.domain === d || c.host === d || c.host.endsWith('.' + d));
+  const real = (i) => items[i].c.project && !items[i].c.inferred;
+  for (let i = 0; i < items.length; i++) {
+    const { seg, c } = items[i];
+    if (c.project || !isTool(c)) continue;
+    let project = null;
+    for (let j = i - 1; j >= 0; j--) {
+      if (seg.s - items[j].seg.e > CONTEXT_GAP) break;
+      if (real(j)) { project = items[j].c.project; break; }
+    }
+    if (!project) {
+      for (let j = i + 1; j < items.length; j++) {
+        if (items[j].seg.s - seg.e > CONTEXT_GAP) break;
+        if (real(j)) { project = items[j].c.project; break; }
+      }
+    }
+    if (project) {
+      items[i].c = { ...c, group: 'linked', project, inferred: true, rowKey: `ctx:${c.domain}`,
+        label: c.domain, task: 'за контекстом: сторінки без назви проєкту' };
+    }
+  }
+}
+
 export function emptyDayState() {
   return { disabled: {}, manual: [], moved: {}, comments: {}, commentBase: {}, done: {}, idle: [] };
 }
@@ -87,9 +119,13 @@ export function buildReport(segs, state, settings, docTitles = {}, opts = {}) {
   };
 
   const sorted = [...segs].filter((x) => x.e > x.s).sort((a, b) => a.s - b.s);
+  const items = [];
   for (const seg of sorted) {
-    let c;
-    try { c = classify(seg, settings, docTitles, idx); } catch { continue; }
+    try { items.push({ seg, c: classify(seg, settings, docTitles, idx) }); } catch { /* bad url */ }
+  }
+  inferFromContext(items, settings);
+
+  for (const { seg, c } of items) {
     const ms = seg.e - seg.s;
     const last = timeline.at(-1);
 
