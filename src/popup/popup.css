@@ -104,3 +104,15 @@ main { padding: 10px 10px 14px; display: flex; flex-direction: column; gap: 8px;
   padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; opacity: 0; transition: opacity .15s; pointer-events: none;
 }
 .toast.show { opacity: 1; }
+
+/* Pause: a big, obvious control; the paused state is loud on purpose */
+.runbar { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border-radius: var(--radius); background: var(--side); border: 1px solid var(--line); }
+.runbar .live { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 3px rgba(240,252,126,.18); flex: none; }
+.runbar .what { flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pausebtn { padding: 8px 14px; font-size: 13px; font-weight: 600; }
+.banner.paused { background: var(--orange); border-color: var(--orange); color: var(--green); padding: 12px; }
+.banner.paused .msg b { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 14px; }
+.banner.paused .keys { font-size: 12px; opacity: .85; margin-top: 2px; }
+.btn.big { padding: 10px 16px; font-size: 14px; background: var(--green); color: var(--lime); border-color: var(--green); }
+.btn.big:hover { filter: brightness(1.15); }
+.offline { color: var(--faint); font-size: 12px; padding: 2px 4px; }

@@ -1,6 +1,6 @@
 import { buildReport, emptyDayState } from '../lib/report.js';
 import { classify, isDomainLike } from '../lib/classify.js';
-import { createTracker, withDefaults, KEEP_SEGMENTS_DAYS } from '../lib/tracker.js';
+import { createTracker, withDefaults, KEEP_SEGMENTS_DAYS, OFF_REASONS } from '../lib/tracker.js';
 import { dayKey, shiftDay, formatReport, formatExact, clock, MIN } from '../lib/time.js';
 
 const store = {
@@ -49,7 +49,7 @@ function chevron() {
 async function load() {
   const today = dayKey(Date.now());
   const dk = `day:${ui.day}`;
-  const got = await store.get(['settings', 'docTitles', 'open', dk]);
+  const got = await store.get(['settings', 'docTitles', 'open', 'paused', dk]);
   const settings = withDefaults(got.settings);
   const state = { ...emptyDayState(), ...(got[dk] || {}) };
   const segs = await tracker.daySegments(ui.day);
@@ -58,7 +58,8 @@ async function load() {
   if (ui.day === today && got.open) {
     try { current = classify(got.open, settings, got.docTitles || {}).project; } catch { /* ignore */ }
   }
-  data = { settings, state, report, current, today };
+  const off = await tracker.dayOff(ui.day);
+  data = { settings, state, report, current, today, paused: got.paused || null, off };
 }
 
 async function updateDay(fn) {
@@ -106,6 +107,33 @@ function projectSelect(selected, onchange) {
     projectNames().map((n) => h('option', { value: n, selected: n === selected ? 'selected' : null }, n)));
   if (selected) sel.value = selected;
   return sel;
+}
+
+async function setPaused(on) {
+  try { await chrome.runtime.sendMessage({ type: on ? 'pause' : 'resume' }); } catch { /* worker restarting */ }
+  await refresh();
+}
+
+function pauseBar() {
+  if (ui.day !== data.today) return null;
+  if (data.paused) {
+    const min = Math.floor((Date.now() - data.paused.s) / MIN);
+    return h('div', { class: 'banner paused' },
+      h('div', { class: 'msg' }, h('b', {}, 'На паузі'), ` з ${clock(data.paused.s)} · ${formatExact(min * MIN)}`,
+        h('div', { class: 'keys' }, 'Час не рахується, доки не продовжиш')),
+      h('button', { class: 'btn primary big', onclick: () => setPaused(false) }, '▶  Продовжити'));
+  }
+  return h('div', { class: 'runbar' },
+    h('span', { class: 'live' }),
+    h('span', { class: 'what' }, data.current ? `Облік іде · ${data.current}` : 'Облік іде'),
+    h('button', { class: 'btn pausebtn', title: 'Пауза (Alt+Shift+P)', onclick: () => setPaused(true) }, '❚❚  Пауза'));
+}
+
+function offLine() {
+  const parts = Object.entries(data.off).filter(([, ms]) => ms >= MIN).sort((a, b) => b[1] - a[1])
+    .map(([r, ms]) => `${OFF_REASONS[r] || r} ${formatExact(ms)}`);
+  if (!parts.length) return null;
+  return h('div', { class: 'offline', title: 'Час, коли BT нічого не рахував, і чому' }, 'Поза обліком: ', parts.join(' · '));
 }
 
 function idleBanners() {
@@ -257,13 +285,13 @@ function render() {
 
   const app = document.getElementById('app');
   const scroll = document.scrollingElement.scrollTop;
-  const kids = [...idleBanners(), ...suggestionBanners(), ...report.projects.map(cardEl)];
+  const kids = [pauseBar(), ...idleBanners(), ...suggestionBanners(), ...report.projects.map(cardEl)];
   if (!report.projects.length) {
     kids.push(h('div', { class: 'empty' },
       h('div', { class: 'display' }, 'Поки порожньо'),
       'Відкрий документ з назвою ', h('code', {}, 'домен / документ / задача'), ' — BT підхопить проєкт сам.'));
   }
-  kids.push(otherEl());
+  kids.push(offLine(), otherEl());
   app.replaceChildren(...kids.filter(Boolean));
   document.scrollingElement.scrollTop = scroll;
 }

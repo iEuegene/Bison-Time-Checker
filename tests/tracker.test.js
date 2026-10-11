@@ -147,3 +147,39 @@ test('cleanup keeps 7 days of segments and 30 days of day state', async () => {
   await tr.cleanup();
   assert.deepEqual(Object.keys(store.data).sort(), ['day:2026-09-13', 'seg:2026-10-06']);
 });
+
+test('pause stops counting whatever the tabs do; resume picks up the current tab', async () => {
+  const { store, tr, tick, day } = setup();
+  await tr.observe(SITE);
+  await tick(10);
+  await tr.pause();
+  await tr.observe(SITE);       // tab events while paused change nothing
+  await tick(30);
+  await tr.observe(DOC);
+  await tick(5);
+  await tr.resume();
+  await tr.observe(DOC);
+  await tick(5);
+  await tr.observe(null);
+  assert.deepEqual(store.data[`seg:${day}`].map((s) => (s.e - s.s) / MIN), [10, 5]);
+  const off = await tr.dayOff(day);
+  assert.equal(off.pause / MIN, 35);
+});
+
+test('off reasons: other app and idle are listed, overnight is not', async () => {
+  const { tr, tick, day } = setup();
+  await tr.observe(SITE);
+  await tick(5);
+  await tr.observe(null);       // Telegram
+  await tick(12);
+  await tr.observe(SITE);
+  await tick(10);
+  await tr.idle('idle', 180);
+  await tick(4);
+  await tr.idle('active', 180);
+  await tr.observe(SITE);
+  await tick(1);
+  const off = await tr.dayOff(day);
+  assert.equal(off.focus / MIN, 12);
+  assert.equal(off.idle / MIN, 7);
+});

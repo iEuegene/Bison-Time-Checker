@@ -7,8 +7,18 @@ import { emptyDayState } from './report.js';
 export const GAP = 2 * MIN;            // heartbeat older than this = Chrome was closed or the laptop slept
 export const MIN_SEGMENT = 5_000;      // tab flicks shorter than 5 s are not recorded
 export const MIN_IDLE_PROMPT = MIN;    // idle under a minute is not worth asking about
+export const MIN_OFF = MIN;            // untracked stretches under a minute are not listed
 export const KEEP_SEGMENTS_DAYS = 7;
 export const KEEP_DAY_STATE_DAYS = 30;
+
+/** Why nothing is being counted. Shown in the popup as "поза обліком". */
+export const OFF_REASONS = {
+  focus: 'інша програма',
+  idle: 'простій',
+  lock: 'екран заблоковано',
+  pause: 'пауза',
+  untracked: 'сторінки без обліку',
+};
 
 export const DEFAULT_SETTINGS = {
   idleMin: 3,
@@ -52,23 +62,44 @@ export function createTracker({ store, now = () => Date.now() }) {
     }
   }
 
+  async function appendDay(prefix, s, e, item) {
+    for (const piece of splitByDay(s, e)) {
+      const key = `${prefix}:${piece.day}`;
+      const got = await store.get([key]);
+      const list = got[key] || [];
+      list.push({ ...item, s: piece.start, e: piece.end });
+      await store.set({ [key]: list });
+    }
+  }
+
   /** Write [open.s, end) into per-day segment lists; auto-create projects named by docs. */
   async function close(open, end) {
     const e = Math.max(open.s, Math.min(end, now()));
     if (e - open.s < MIN_SEGMENT) return;
-    for (const piece of splitByDay(open.s, e)) {
-      const key = `seg:${piece.day}`;
-      const got = await store.get([key]);
-      const list = got[key] || [];
-      list.push({ s: piece.start, e: piece.end, url: open.url, title: open.title });
-      await store.set({ [key]: list });
-    }
+    await appendDay('seg', open.s, e, { url: open.url, title: open.title });
     const s = await settings();
     const { docTitles = {} } = await store.get(['docTitles']);
     const c = classify(open, s, docTitles);
     if (c.group === 'docs' && c.project && !s.projects[c.project] && normalizeDomain(c.project)) {
       s.projects[c.project] = { aliases: [] };
       await store.set({ settings: s });
+    }
+  }
+
+  // ---- "off" stretches: why time between segments was not counted ----
+  async function startOff(reason, t) {
+    const { off } = await store.get(['off']);
+    if (off && off.reason === reason) return;
+    if (off) await endOff(t);
+    await store.set({ off: { s: t, beat: now(), reason } });
+  }
+  async function endOff(t) {
+    const { off } = await store.get(['off']);
+    if (!off) return;
+    await store.set({ off: null });
+    // Overnight and anything under a minute is noise, not information.
+    if (t - off.s >= MIN_OFF && dayKey(off.s) === dayKey(t)) {
+      await appendDay('off', off.s, t, { reason: off.reason });
     }
   }
 
@@ -95,23 +126,31 @@ export function createTracker({ store, now = () => Date.now() }) {
      */
     observe: (tab) => serial(async () => {
       const t = now();
-      let { open = null, idleState = 'active' } = await store.get(['open', 'idleState']);
+      let { open = null, idleState = 'active', paused = null } = await store.get(['open', 'idleState', 'paused']);
       open = await settleStale(open);
       const s = await settings();
-      const want = idleState === 'active' && tab && !tab.incognito && isTrackable(tab.url, s) ? tab : null;
-      if (want) await rememberDocTitle(want);
+      const trackable = !!tab && !tab.incognito && isTrackable(tab.url, s);
+      const want = !paused && idleState === 'active' && trackable ? tab : null;
+      if (tab && trackable) await rememberDocTitle(tab);
 
       if (open && want && sameTarget(open, want)) {
         await store.set({ open: { ...open, url: want.url, title: want.title || open.title, beat: t } });
         return;
       }
       if (open) await close(open, t);
-      await store.set({ open: want ? { s: t, url: want.url, title: want.title || '', beat: t } : null });
+      if (want) {
+        await endOff(t);
+        await store.set({ open: { s: t, url: want.url, title: want.title || '', beat: t } });
+      } else {
+        await store.set({ open: null });
+        const reason = paused ? 'pause' : idleState === 'idle' ? 'idle' : idleState === 'locked' ? 'lock' : !tab ? 'focus' : 'untracked';
+        await startOff(reason, t);
+      }
     }),
 
     heartbeat: () => serial(async () => {
       const t = now();
-      let { open = null, idlePending = null } = await store.get(['open', 'idlePending']);
+      let { open = null, idlePending = null, off = null } = await store.get(['open', 'idlePending', 'off']);
       open = await settleStale(open);
       if (open) await store.set({ open: { ...open, beat: t } });
       if (idlePending) {
@@ -119,6 +158,19 @@ export function createTracker({ store, now = () => Date.now() }) {
         if (t - idlePending.beat > GAP) idlePending.frozen = true;
         if (!idlePending.frozen) idlePending.beat = t;
         await store.set({ idlePending });
+      }
+      if (off) {
+        if (t - off.beat > GAP) {
+          // Slept or Chrome was closed: keep what was seen before, restart after.
+          await store.set({ off: { ...off, beat: t } });
+          const ended = { ...off };
+          if (off.beat - off.s >= MIN_OFF && dayKey(off.s) === dayKey(off.beat)) {
+            await appendDay('off', off.s, off.beat, { reason: off.reason });
+          }
+          await store.set({ off: { s: t, beat: t, reason: ended.reason } });
+        } else {
+          await store.set({ off: { ...off, beat: t } });
+        }
       }
     }),
 
@@ -133,12 +185,14 @@ export function createTracker({ store, now = () => Date.now() }) {
           const end = Math.max(open.s, t - idleSec * 1000);
           await close(open, end);
           idlePending = { s: end, beat: t, project: await projectOf(open) };
+          await startOff('idle', end);
         }
         await store.set({ open: null, idleState: 'idle', idlePending });
         return;
       }
       if (state === 'locked') {
         if (open) await close(open, t);
+        await startOff('lock', t);
         await store.set({ open: null, idleState: 'locked', idlePending: null });
         return;
       }
@@ -156,6 +210,21 @@ export function createTracker({ store, now = () => Date.now() }) {
       await store.set({ idleState: 'active', idlePending: null });
     }),
 
+    /** Manual pause: stops counting until resume(), whatever the tabs do. */
+    pause: () => serial(async () => {
+      const t = now();
+      let { open = null, paused = null } = await store.get(['open', 'paused']);
+      if (paused) return;
+      open = await settleStale(open);
+      if (open) await close(open, t);
+      await store.set({ open: null, paused: { s: t } });
+      await startOff('pause', t);
+    }),
+
+    resume: () => serial(async () => {
+      await store.set({ paused: null });
+    }),
+
     /** Delete old raw segments (7 days) and day states (30 days). */
     cleanup: () => serial(async () => {
       const today = dayKey(now());
@@ -163,7 +232,7 @@ export function createTracker({ store, now = () => Date.now() }) {
       const segLimit = shiftDay(today, -(KEEP_SEGMENTS_DAYS - 1));
       const dayLimit = shiftDay(today, -(KEEP_DAY_STATE_DAYS - 1));
       const drop = Object.keys(all).filter((k) =>
-        (k.startsWith('seg:') && k.slice(4) < segLimit) || (k.startsWith('day:') && k.slice(4) < dayLimit));
+        ((k.startsWith('seg:') || k.startsWith('off:')) && k.slice(4) < segLimit) || (k.startsWith('day:') && k.slice(4) < dayLimit));
       if (drop.length) await store.remove(drop);
     }),
 
@@ -180,6 +249,19 @@ export function createTracker({ store, now = () => Date.now() }) {
         }
       }
       return list;
+    },
+
+    /** Untracked stretches of a day by reason, the current one included: {reason: ms}. */
+    dayOff: async (day) => {
+      const t = now();
+      const key = `off:${day}`;
+      const got = await store.get([key, 'off']);
+      const out = {};
+      const add = (r, ms) => { out[r] = (out[r] || 0) + ms; };
+      for (const x of got[key] || []) add(x.reason, x.e - x.s);
+      const cur = got.off;
+      if (cur && dayKey(cur.s) === day && t - cur.beat <= GAP && t - cur.s >= MIN_OFF) add(cur.reason, t - cur.s);
+      return out;
     },
   };
 }

@@ -6,7 +6,7 @@ export const GROUPS = [
   { id: 'docs', title: 'Документи' },
   { id: 'tools', title: 'Інструменти' },
   { id: 'site', title: 'Сайт' },
-  { id: 'linked', title: 'Пов’язані сайти' },
+  { id: 'linked', title: 'Інші сервіси' },
   { id: 'manual', title: 'Вручну' },
 ];
 

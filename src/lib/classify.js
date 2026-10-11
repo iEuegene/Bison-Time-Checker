@@ -148,7 +148,8 @@ export function classify(tab, settings, docTitles = {}, idx = projectIndex(setti
   if (docId) {
     const title = docTitles[docId] || tab.title;
     const parsed = parseDocTitle(title);
-    const project = ruleProject || (parsed && projectFromSegment(parsed.first, settings, idx));
+    const project = ruleProject || (parsed && projectFromSegment(parsed.first, settings, idx))
+      || projectInTitle(stripDocSuffix(title), idx)?.project;
     if (project) {
       return { ...base, group: 'docs', project, rowKey: `doc:${docId}`,
         label: parsed ? parsed.doc : stripDocSuffix(title), task: parsed ? parsed.task : '' };
@@ -172,5 +173,46 @@ export function classify(tab, settings, docTitles = {}, idx = projectIndex(setti
   if (ruleProject) {
     return { ...base, group: 'linked', project: ruleProject, rowKey: `link:${domain}`, label: domain };
   }
+  // A project domain in the page title (task trackers, CRMs, search for the client) = work on it.
+  const named = projectInTitle(tab.title, idx);
+  if (named) {
+    const label = cleanTitle(tab.title, named.match) || domain;
+    return { ...base, group: 'linked', project: named.project, rowKey: `title:${domain}|${label}`, label, task: domain };
+  }
   return { ...base, group: 'other', project: null, rowKey: `dom:${domain}`, label: domain };
+}
+
+const TOKEN_EDGE = '[^\\p{L}\\p{N}.-]';
+
+/** First known project domain (or domain alias) written in a title, as a whole token. */
+export function projectInTitle(title, idx) {
+  if (!title) return null;
+  const low = title.toLowerCase();
+  let best = null;
+  for (const [key, project] of idx) {
+    if (!key.includes('.')) continue; // internal names like "Inweb" are too common in titles
+    let from = 0;
+    while (from <= low.length) {
+      const i = low.indexOf(key, from);
+      if (i < 0) break;
+      const before = i === 0 ? '' : low[i - 1];
+      const after = low[i + key.length] || '';
+      const edge = new RegExp(`^${TOKEN_EDGE}$`, 'u');
+      const okBefore = !before || edge.test(before);
+      const okAfter = !after || edge.test(after) || (after === '.' && !/[\p{L}\p{N}]/u.test(low[i + key.length + 1] || ''));
+      if (okBefore && okAfter) {
+        if (!best || i < best.index || (i === best.index && key.length > best.match.length)) best = { index: i, match: key, project };
+        break;
+      }
+      from = i + 1;
+    }
+  }
+  return best;
+}
+
+/** "paramedic.ua - SEO-комплекс / ТЗ" -> "SEO-комплекс / ТЗ". */
+function cleanTitle(title, match) {
+  const i = title.toLowerCase().indexOf(match);
+  const cut = i < 0 ? title : title.slice(0, i) + title.slice(i + match.length);
+  return cut.replace(/^[\s\-–—|/:·•,]+|[\s\-–—|/:·•,]+$/g, '').replace(/\s{2,}/g, ' ').trim();
 }

@@ -108,3 +108,17 @@ test('normalizeDomain rejects non-domains', () => {
   assert.equal(normalizeDomain('sc-domain:Shop.com.ua'), 'shop.com.ua');
   assert.equal(normalizeDomain('сайт.укр'), 'сайт.укр');
 });
+
+test('project domain in a page title assigns the page (task tracker, CRM)', () => {
+  const s = { ...settings, projects: { ...settings.projects, 'paramedic.ua': { aliases: [] } } };
+  const c = classify({ url: 'https://inweb.planfix.com/task/123', title: 'paramedic.ua - SEO-комплекс(KPI) / Технічне завдання №57' }, s);
+  assert.deepEqual([c.group, c.project, c.label, c.task], ['linked', 'paramedic.ua', 'SEO-комплекс(KPI) / Технічне завдання №57', 'planfix.com']);
+  // whole tokens only: "anti-paramedic.ua.example" or "myparamedic.ua" do not count
+  assert.equal(classify({ url: 'https://x.org/', title: 'myparamedic.ua news' }, s).project, null);
+  assert.equal(classify({ url: 'https://x.org/', title: 'paramedic.uax' }, s).project, null);
+  assert.equal(classify({ url: 'https://x.org/', title: 'Огляд paramedic.ua.' }, s).project, 'paramedic.ua');
+  // internal names are not matched in titles
+  assert.equal(classify({ url: 'https://x.org/', title: 'Inweb блог' }, s).project, null);
+  // a doc without the convention but with the domain in its name
+  assert.equal(classify({ url: 'https://docs.google.com/document/d/abcdefghijk9/edit', title: 'Нотатки по paramedic.ua - Google Docs' }, s).project, 'paramedic.ua');
+});
