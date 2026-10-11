@@ -86,7 +86,9 @@ public sealed class Tracker
         }
         var settings = _store.LoadSettings();
         var c = Classifier.Classify(new WindowInfo(open.Proc, open.Title), settings);
-        if (c.AutoProject && c.Project != null && !settings.Projects.ContainsKey(c.Project))
+        // A URL in some window title becomes a project only after a minute of real work there.
+        if (c.AutoProject && c.Project != null && !settings.Projects.ContainsKey(c.Project)
+            && (!c.AutoAfterMinute || e - open.S >= TimeUtil.Min))
         {
             settings.Projects[c.Project] = new ProjectCfg();
             _store.SaveSettings(settings);

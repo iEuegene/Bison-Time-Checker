@@ -116,6 +116,23 @@ Test("ignore by program or title fragment", () =>
     True(!Classifier.IsIgnored(new WindowInfo("chrome", "ti.ua - Google Chrome"), s), "not ignored");
 });
 
+Test("Screaming Frog crawl title: dashed URL names the client", () =>
+{
+    var c = C("javaw", "https-caffitalia-com-ua- - Screaming Frog SEO Spider 20.2 (Licensed)", S());
+    Eq("caffitalia.com.ua", c.Project); True(c.AutoProject && c.AutoAfterMinute, "auto after a minute");
+    Eq("Screaming Frog", c.App); Eq("Screaming Frog SEO Spider 20.2 (Licensed)", c.Label);
+    // a dash inside the name, and a known project with its exact spelling
+    Eq("aqua-room.com.ua", C("javaw", "https-www-aqua-room-com-ua- - Screaming Frog SEO Spider", S()).Project);
+    Eq("shop.com.ua", C("javaw", "https-test-shop-com-ua- - Screaming Frog SEO Spider", S("shop.com.ua")).Project);
+    Eq("covere2.eu", C("javaw", "https-covere2-eu-de- - Screaming Frog SEO Spider", S()).Project);
+});
+Test("URL written in a title names the client", () =>
+{
+    var c = C("chrome", "https://newclient.com.ua/catalog/ - Google Chrome", S());
+    Eq("newclient.com.ua", c.Project); True(c.AutoAfterMinute, "after a minute");
+    Eq(null, C("chrome", "https-only - Google Chrome", S()).Project);
+});
+
 // ---------------- report ----------------
 var T0 = ToMs(new DateTime(2026, 10, 12, 10, 0, 0));
 Segment Sg(double from, double to, string proc, string title) =>
@@ -203,6 +220,17 @@ Test("tracker: switching windows makes segments; doc names a new project", () =>
     Eq(2, segs.Count);
     True(Math.Abs(segs[0].E - segs[0].S - 30 * Min) <= 1000, "30 min doc");
     True(st.Settings.Projects.ContainsKey("shop.com.ua"), "project created");
+});
+Test("tracker: a URL in a title becomes a project only after a minute", () =>
+{
+    var (st, tr, _, run, _) = Setup();
+    var sf = new WindowInfo("javaw", "https-caffitalia-com-ua- - Screaming Frog SEO Spider 20.2 (Licensed)");
+    run(0.5, sf, false, false);
+    run(0.5, TG, false, false);
+    True(!st.Settings.Projects.ContainsKey("caffitalia.com.ua"), "30 s is not enough");
+    run(2, sf, false, false);
+    run(0.5, TG, false, false);
+    True(st.Settings.Projects.ContainsKey("caffitalia.com.ua"), "2 min creates it");
 });
 Test("tracker: idle keeps the minutes before the threshold, prompts after", () =>
 {

@@ -14,7 +14,8 @@ public sealed record Cls(
     string App,
     bool Browser,
     bool AutoProject = false,
-    bool WorkTool = false);
+    bool WorkTool = false,
+    bool AutoAfterMinute = false);
 
 /// <summary>
 /// Maps (program, window title) to a project. Pure and deterministic: the same input
@@ -211,11 +212,57 @@ public static class Classifier
         return null;
     }
 
+    static readonly Regex UrlInTitle = new(@"https?://(?<h>[\p{L}\p{N}](?:[\p{L}\p{N}.-]*[\p{L}\p{N}])?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex DashedUrl = new(@"(?<![\p{L}\p{N}])(?<t>https?-(?<s>[a-z0-9]+(?:-[a-z0-9]+)+)-*)(?![\p{L}\p{N}])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Public suffixes seen in client work, as dash-separated tokens (Screaming Frog slugs lose the dots).</summary>
+    static readonly string[] Suffix2 = { "com.ua", "net.ua", "org.ua", "in.ua", "kiev.ua", "kyiv.ua", "od.ua", "lviv.ua", "dp.ua", "kh.ua", "co.uk", "com.pl", "co.il", "com.cy", "com.tr" };
+    static readonly HashSet<string> Suffix1 = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Only zones that are not also common words in names ("shop", "store", "online" stay out).
+        "ua", "com", "net", "org", "eu", "info", "biz", "pro", "io", "pl", "lv", "lt", "ee", "de", "uk", "cy", "md", "ge", "cz", "sk",
+        "at", "ch", "fr", "it", "es", "nl", "be", "us", "ca",
+    };
+
+    /// <summary>"caffitalia-com-ua" → "caffitalia.com.ua"; known projects win, then the first public suffix from the left.</summary>
+    public static string? UndashDomain(string slug, Dictionary<string, string> idx)
+    {
+        var sl = slug.Trim('-').ToLowerInvariant();
+        if (sl.StartsWith("www-")) sl = sl[4..];
+        string? best = null;
+        foreach (var key in idx.Keys)
+        {
+            if (!key.Contains('.')) continue;
+            var dashed = key.Replace('.', '-');
+            if (("-" + sl + "-").Contains("-" + dashed + "-") && (best is null || key.Length > best.Length)) best = key;
+        }
+        if (best != null) return best;
+        var t = sl.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        // Two-level zones first anywhere (com-ua), then single zones: "best-com-ua" is best.com.ua, not best.com.
+        for (var i = 1; i + 1 < t.Length; i++)
+            if (Suffix2.Contains($"{t[i]}.{t[i + 1]}"))
+                return NormalizeDomain($"{string.Join('-', t[..i])}.{t[i]}.{t[i + 1]}") is { Length: > 0 } d2 ? d2 : null;
+        for (var i = 1; i < t.Length; i++)
+            if (Suffix1.Contains(t[i]))
+                return NormalizeDomain($"{string.Join('-', t[..i])}.{t[i]}") is { Length: > 0 } d1 ? d1 : null;
+        return null;
+    }
+
+    /// <summary>A domain taken from a URL written in a title. Returns the domain and the exact text it came from.</summary>
+    public static (string Domain, string Token)? DomainFromUrl(string title, Dictionary<string, string> idx)
+    {
+        var m = UrlInTitle.Match(title);
+        if (m.Success && NormalizeDomain(m.Groups["h"].Value) is { Length: > 0 } d) return (d, m.Value);
+        var dm = DashedUrl.Match(title);
+        if (dm.Success && UndashDomain(dm.Groups["s"].Value, idx) is { } u) return (u, dm.Groups["t"].Value);
+        return null;
+    }
+
     public static Cls Classify(WindowInfo w, Settings s, Dictionary<string, string>? idx = null)
     {
         idx ??= Index(s);
         var browser = IsBrowser(w.Proc);
-        var app = AppName(w.Proc);
+        var app = w.Title.Contains("Screaming Frog", StringComparison.OrdinalIgnoreCase) ? "Screaming Frog" : AppName(w.Proc);
         var clean = Clean(w.Title, browser);
         var shown = StripGoogle(clean);
         var group = browser ? "web" : "apps";
@@ -259,6 +306,19 @@ public static class Classifier
                 return new Cls(group, project, Key(group, label), label, "", w.Proc, app, browser,
                     AutoProject: !s.Projects.ContainsKey(project));
             }
+        }
+
+        // 4b. A URL in the title — written normally ("https://site.com/") or the way Screaming Frog
+        //     names a crawl ("https-caffitalia-com-ua-"). A new client is added after a minute of work.
+        var fromUrl = DomainFromUrl(clean, idx);
+        if (fromUrl != null)
+        {
+            var project = ResolveDomain(fromUrl.Value.Domain, idx) ?? fromUrl.Value.Domain;
+            var label = CutDomain(shown.Replace(fromUrl.Value.Token, fromUrl.Value.Domain), fromUrl.Value.Domain);
+            label = Regex.Replace(label, @"^(?:https?://|https?-)", "").Trim(' ', '-', '/');
+            if (label == "") label = app;
+            return new Cls(group, project, Key(group, label), label, "", w.Proc, app, browser,
+                AutoProject: !s.Projects.ContainsKey(project), AutoAfterMinute: true);
         }
 
         // 5. A whole program assigned to a project ("figma → shop.com.ua").
