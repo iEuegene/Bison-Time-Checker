@@ -1,0 +1,66 @@
+/* Inweb palette and type, same values as Bison Switcher (Windows/MainWindow.xaml). */
+@font-face { font-family: 'Geist'; src: url('../fonts/Geist-Regular.ttf') format('truetype'); font-weight: 400; }
+@font-face { font-family: 'Geist'; src: url('../fonts/Geist-Medium.ttf') format('truetype'); font-weight: 500; }
+@font-face { font-family: 'Geist'; src: url('../fonts/Geist-SemiBold.ttf') format('truetype'); font-weight: 600; }
+@font-face { font-family: 'Unbounded'; src: url('../fonts/Unbounded-Bold.ttf') format('truetype'); font-weight: 700; }
+
+:root {
+  --lime: #F0FC7E;
+  --green: #003B29;
+  --orange: #EF583D;
+  --dark: #1C1C1C;
+  --bg: #071F17;
+  --side: #0A271D;
+  --card: #0E3125;
+  --card-hi: #133B2D;
+  --line: #1F4A3B;
+  --text: #F7F7F7;
+  --muted: #94ADA3;
+  --faint: #5E7D71;
+  --skew: -14deg;
+  --radius: 10px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 400 13px/1.4 'Geist', 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+.display { font-family: 'Unbounded', 'Geist', sans-serif; font-weight: 700; letter-spacing: -0.01em; }
+
+/* Buttons */
+.btn {
+  border: 1px solid #2E5E4C; background: transparent; color: var(--text);
+  border-radius: 8px; padding: 5px 10px; font-weight: 500; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { background: var(--card-hi); }
+.btn.primary { background: var(--lime); color: var(--green); border-color: var(--lime); font-weight: 600; }
+.btn.primary:hover { filter: brightness(0.95); }
+.btn.quiet { border-color: transparent; color: var(--muted); }
+.btn.quiet:hover { color: var(--text); }
+.btn.warn { border-color: var(--orange); color: var(--orange); }
+.btn:focus-visible, .switch:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+
+/* Toggle: lime track + green knob when on, like BS */
+.switch {
+  appearance: none; -webkit-appearance: none; flex: none; position: relative; cursor: pointer; margin: 0;
+  width: 30px; height: 17px; border-radius: 9px; background: #16392C; border: 1px solid #2E5E4C; transition: background .12s;
+}
+.switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--muted); transition: transform .12s, background .12s;
+}
+.switch:checked { background: var(--lime); border-color: var(--lime); }
+.switch:checked::after { transform: translateX(13px); background: var(--green); }
+
+/* Brand plate: skewed parallelogram, upright content */
+.plate { display: inline-block; transform: skewX(var(--skew)); background: var(--lime); color: var(--green); border-radius: 3px; }
+.plate > span { display: inline-block; transform: skewX(calc(-1 * var(--skew))); }
+
+select, input[type="text"], input[type="number"], textarea {
+  background: var(--side); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; color: var(--text);
+}
+select option { background: var(--side); }
+::placeholder { color: var(--faint); }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }

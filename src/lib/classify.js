@@ -1,0 +1,176 @@
+// Maps a tab (url + title) to a project and a report row.
+// Pure: no chrome.* calls, so it runs the same in the service worker, the popup and tests.
+import psl from '../vendor/psl.mjs';
+
+const DOC_SUFFIX =
+  /\s+[-–—]\s+Google\s+(?:Docs|Sheets|Slides|Forms|Drawings|Документи|Таблиці|Презентації|Форми|Документы|Таблицы|Презентации|Формы)\s*$/iu;
+const DOC_URL = /^\/(document|spreadsheets|presentation)\/(?:u\/\d+\/)?d\/([\w-]{10,})/;
+const DOMAIN_RE = /^(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+\p{L}{2,}$/u;
+const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
+/** SEO tools: host test + query params that carry the analysed domain. */
+const TOOLS = [
+  { name: 'Search Console', test: (u) => u.hostname === 'search.google.com' && u.pathname.startsWith('/search-console'), params: ['resource_id'] },
+  { name: 'Ahrefs', test: (u) => hostIs(u.hostname, 'ahrefs.com'), params: ['target', 'input', 'url', 'domain'] },
+  { name: 'Serpstat', test: (u) => hostIs(u.hostname, 'serpstat.com'), params: ['query', 'domain', 'url', 'q', 'target'] },
+];
+
+export function hostIs(host, domain) {
+  return host === domain || host.endsWith('.' + domain);
+}
+
+/** "https://WWW.Ti.ua/path" -> "ti.ua"; "sc-domain:ti.ua" -> "ti.ua". Returns '' when not a domain. */
+export function normalizeDomain(raw) {
+  if (!raw) return '';
+  let s = String(raw).trim().toLowerCase();
+  s = s.replace(/^sc-domain:/, '').replace(/^[a-z][a-z0-9+.-]*:\/\//, '');
+  s = s.split(/[/?#]/)[0].replace(/:\d+$/, '').replace(/^www\./, '').replace(/\.$/, '');
+  return isDomainLike(s) ? s : '';
+}
+
+export function isDomainLike(s) {
+  return !!s && !/\s/.test(s) && !IPV4.test(s) && DOMAIN_RE.test(s);
+}
+
+/** Registrable domain via the Public Suffix List: test.aqua-room.com.ua -> aqua-room.com.ua. */
+export function registrable(host) {
+  if (!host || IPV4.test(host) || !host.includes('.')) return host || '';
+  return psl.get(host) || host;
+}
+
+/** lowercase key (project name, its domain, each alias) -> canonical project name. */
+export function projectIndex(settings) {
+  const idx = new Map();
+  for (const [name, p] of Object.entries(settings.projects || {})) {
+    if (p.archived) continue;
+    idx.set(name.toLowerCase(), name);
+    for (const a of p.aliases || []) {
+      const d = normalizeDomain(a) || a.trim().toLowerCase();
+      if (d) idx.set(d, name);
+    }
+  }
+  return idx;
+}
+
+/** Known project for a host: exact host, then each parent up to the registrable domain. */
+export function resolveDomain(host, idx) {
+  const h = normalizeDomain(host);
+  if (!h) return null;
+  const labels = h.split('.');
+  for (let i = 0; i < labels.length - 1; i++) {
+    const hit = idx.get(labels.slice(i).join('.'));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Google Docs title "ti.ua / ТЗ №123 / Виправлення помилок - Google Docs"
+ * -> { first: 'ti.ua', doc: 'ТЗ №123', task: 'Виправлення помилок' }. Needs at least two segments.
+ */
+export function parseDocTitle(title) {
+  if (!title) return null;
+  const clean = title.replace(DOC_SUFFIX, '').trim();
+  const parts = clean.split(/\s+\/\s+/).map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  return { first: parts[0], doc: parts[1], task: parts.slice(2).join(' / ') };
+}
+
+export function stripDocSuffix(title) {
+  return (title || '').replace(DOC_SUFFIX, '').trim();
+}
+
+/** Project named by a doc's first segment: a domain, or one of the internal (non-domain) projects. */
+export function projectFromSegment(first, settings, idx) {
+  const d = normalizeDomain(first);
+  if (d) return resolveDomain(d, idx) || d;
+  const internal = idx.get(first.trim().toLowerCase());
+  if (internal && settings.projects?.[internal]?.internal) return internal;
+  return null;
+}
+
+export function docIdOf(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname !== 'docs.google.com') return null;
+    const m = u.pathname.match(DOC_URL);
+    return m ? m[2] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Tab is never recorded: not http(s), or on the ignore list. */
+export function isTrackable(url, settings) {
+  let u;
+  try { u = new URL(url); } catch { return false; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  const host = u.hostname.toLowerCase().replace(/^www\./, '');
+  return !(settings.ignore || []).some((d) => hostIs(host, d));
+}
+
+function toolTarget(u, tool) {
+  for (const p of tool.params) {
+    const d = normalizeDomain(u.searchParams.get(p));
+    if (d) return d;
+  }
+  return '';
+}
+
+function ruleFor(url, host, settings) {
+  for (const r of settings.rules || []) {
+    const m = (r.match || '').trim().toLowerCase();
+    if (!m) continue;
+    const hit = isDomainLike(m) && !m.includes('/') ? hostIs(host, m) : url.toLowerCase().includes(m);
+    if (hit) return r;
+  }
+  return null;
+}
+
+/**
+ * Classify one tab.
+ * @param {{url:string,title:string}} tab
+ * @param {object} settings
+ * @param {object} docTitles  docId -> best known title (titles arrive late while a doc loads)
+ * @returns {{group:'docs'|'tools'|'site'|'linked'|'other', project:string|null, rowKey:string,
+ *            label:string, task:string, host:string, domain:string, path:string, tool?:string}}
+ */
+export function classify(tab, settings, docTitles = {}, idx = projectIndex(settings)) {
+  const u = new URL(tab.url);
+  const host = u.hostname.toLowerCase().replace(/^www\./, '');
+  const domain = registrable(host);
+  const base = { host, domain, path: u.pathname, task: '' };
+
+  const docId = docIdOf(tab.url);
+  const rule = ruleFor(tab.url, host, settings);
+  const ruleProject = rule && idx.get(rule.project.toLowerCase());
+
+  if (docId) {
+    const title = docTitles[docId] || tab.title;
+    const parsed = parseDocTitle(title);
+    const project = ruleProject || (parsed && projectFromSegment(parsed.first, settings, idx));
+    if (project) {
+      return { ...base, group: 'docs', project, rowKey: `doc:${docId}`,
+        label: parsed ? parsed.doc : stripDocSuffix(title), task: parsed ? parsed.task : '' };
+    }
+    return { ...base, group: 'other', project: null, rowKey: `doc:${docId}`, label: stripDocSuffix(title) || 'Google Docs' };
+  }
+
+  const tool = TOOLS.find((t) => t.test(u));
+  if (tool) {
+    const target = toolTarget(u, tool);
+    const project = ruleProject || (target && resolveDomain(target, idx));
+    if (project) return { ...base, group: 'tools', project, rowKey: `tool:${tool.name}`, label: tool.name, tool: tool.name };
+    return { ...base, group: 'other', project: null, rowKey: `tool:${tool.name}:${target}`,
+      label: target ? `${tool.name} · ${target}` : tool.name, tool: tool.name };
+  }
+
+  const own = resolveDomain(host, idx);
+  if (own && (!ruleProject || ruleProject === own)) {
+    return { ...base, group: 'site', project: own, rowKey: `site:${own}`, label: host };
+  }
+  if (ruleProject) {
+    return { ...base, group: 'linked', project: ruleProject, rowKey: `link:${domain}`, label: domain };
+  }
+  return { ...base, group: 'other', project: null, rowKey: `dom:${domain}`, label: domain };
+}
