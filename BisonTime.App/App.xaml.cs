@@ -105,10 +105,10 @@ public partial class App : Application
     bool _balloonShown;
 
     /// <summary>Newer release found by the last check (daily or manual); null when up to date or unknown.</summary>
-    public Updater.Available? Update { get; private set; }
-    public event Action? UpdateChanged;
+    internal Updater.Available? Update { get; private set; }
+    internal event Action? UpdateChanged;
 
-    public void SetUpdate(Updater.Available? a)
+    internal void SetUpdate(Updater.Available? a)
     {
         Update = a;
         UpdateChanged?.Invoke();
