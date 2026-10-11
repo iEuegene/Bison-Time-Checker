@@ -119,3 +119,20 @@ test('task manager page without a client goes to the project worked on around it
   const r4 = buildReport([seg(0, 10, DOC, DOC_T), seg(10, 15, 'https://youtube.com/', 'x')], {}, s);
   assert.equal(r4.otherMs, 5 * MIN);
 });
+
+test('each row inside a project counts at least 1 minute; the site stays one row', () => {
+  const D = (id) => `https://docs.google.com/document/d/${id}/edit`;
+  const r = buildReport([
+    { s: at(0), e: at(0) + 20_000, url: D('abcdefghijk1'), title: DOC_T },
+    { s: at(1), e: at(1) + 30_000, url: D('abcdefghijk2'), title: 'shop.com.ua / ТЗ №6 - Google Docs' },
+    { s: at(2), e: at(2) + 10_000, url: 'https://shop.com.ua/a', title: '' },
+    { s: at(3), e: at(3) + 10_000, url: 'https://shop.com.ua/b', title: '' },
+  ], {}, settings);
+  const p = r.projects[0];
+  const docs = p.groups.find((g) => g.id === 'docs').rows;
+  assert.deepEqual(docs.map((x) => x.ms / MIN), [1, 1]);
+  const site = p.groups.find((g) => g.id === 'site').rows[0];
+  assert.equal(site.ms, MIN); // 20 s on two pages -> one minute, not two
+  assert.equal(p.exactMs, 3 * MIN);
+  assert.equal(p.rounded, 5);
+});

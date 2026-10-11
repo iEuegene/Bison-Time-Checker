@@ -15,6 +15,7 @@ const COMMENT_MIN = 5 * MIN;      // a source enters the comment draft from 5 mi
 const SUGGEST_MIN = 5 * MIN;      // an unknown domain is offered as a project from 5 min a day
 const TOP_PAGES = 5;
 
+const MIN_ROW = MIN;              // a row inside a project never counts less than a minute
 const CONTEXT_GAP = 15 * MIN;     // a task-manager page belongs to the project worked on within 15 min
 
 /**
@@ -165,6 +166,12 @@ export function buildReport(segs, state, settings, docTitles = {}, opts = {}) {
   const out = [];
   for (const p of projects.values()) {
     const rows = [...p.rows.values()];
+    // Any document, tool or task page opened today counts at least a minute: a glance at an
+    // ТЗ is work too. The client site is one row, so 30 quick page views don't become 30 min.
+    for (const r of rows) {
+      r.rawMs = r.ms;
+      if (r.group !== 'manual' && r.ms > 0 && r.ms < MIN_ROW) r.ms = MIN_ROW;
+    }
     const groups = GROUPS.map((g) => ({
       id: g.id,
       title: g.title,

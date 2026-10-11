@@ -234,7 +234,7 @@ function cardEl(p) {
     chevron());
   const body = h('div', { class: 'body' },
     p.groups.map((g) => h('div', { class: 'group' }, h('h4', {}, g.title), g.rows.map((r) => rowEl(p, r, g.id)))),
-    h('div', { class: 'addtime' }, h('span', { class: 'lbl' }, `Точно: ${formatExact(p.exactMs)}`),
+    h('div', { class: 'addtime' }, h('span', { class: 'lbl' }, `До округлення: ${formatExact(p.exactMs)}`),
       [5, 15].map((n) => h('button', { class: 'btn', onclick: () => updateDay((st) => {
         st.manual.push({ id: `m${Date.now()}`, project: p.name, min: n, label: `Вручну +${n} хв` });
       }) }, `+${n} хв`))),
