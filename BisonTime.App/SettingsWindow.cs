@@ -164,8 +164,8 @@ internal sealed class SettingsWindow : Window
         {
             var p = _s.Projects[n];
             var title = HRow(T(n, 13, weight: FontWeights.SemiBold),
-                p.Internal ? Tag("внутрішній", "LimeBrush", "GreenBrush") : null,
-                p.Archived ? Tag("архів", "FaintBrush", "BgBrush") : null);
+                p.Internal ? TagChip("внутрішній", "LimeBrush", "GreenBrush") : null,
+                p.Archived ? TagChip("архів", "FaintBrush", "BgBrush") : null);
             UIElement below;
             if (p.Internal) below = T($"Документи «{n} / …» ідуть сюди", 12, "MutedBrush");
             else
@@ -189,7 +189,7 @@ internal sealed class SettingsWindow : Window
         }));
     }
 
-    static Border Tag(string text, string bg, string fg) => new()
+    static Border TagChip(string text, string bg, string fg) => new()
     {
         Background = B(bg), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(8, 0, 0, 0),
         Child = T(text, 11, fg, FontWeights.SemiBold), VerticalAlignment = VerticalAlignment.Center,

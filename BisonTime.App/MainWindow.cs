@@ -302,7 +302,7 @@ internal sealed class MainWindow : Window
         };
     }
 
-    UIElement CommentBox(ProjectReport p)
+    FrameworkElement CommentBox(ProjectReport p)
     {
         var c = p.Comment;
         var box = Input(c.Text, multiline: true);
