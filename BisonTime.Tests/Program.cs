@@ -390,6 +390,13 @@ Test("updates: version comparison", () =>
     True(!Updates.IsNewer("1.2.0", "1.2.0"), "same");
     True(!Updates.IsNewer("garbage", "1.0.0"), "garbage");
 });
+Test("updates: newest release tag when nothing is signed yet", () =>
+{
+    var json = """[{"tag_name":"v1.2.0","draft":false,"prerelease":true},{"tag_name":"v1.10.0","draft":true},{"tag_name":"v1.1.0","draft":false},{"tag_name":"nightly"}]""";
+    Eq("1.2.0", Updates.NewestVersion(json), "drafts and junk tags skipped");
+    Eq(null, Updates.NewestVersion("[]"), "empty list");
+    Eq(null, Updates.NewestVersion("<html>"), "not json");
+});
 
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;

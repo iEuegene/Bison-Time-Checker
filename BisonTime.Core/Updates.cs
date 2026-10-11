@@ -103,6 +103,22 @@ public static class Updates
         return parts.All(p => p != "" && p != "." && p != "..");
     }
 
+    /// <summary>Highest "vX.Y.Z" among published (non-draft) releases in a GitHub API releases list.</summary>
+    public static string? NewestVersion(string releasesJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(releasesJson);
+            return doc.RootElement.EnumerateArray()
+                .Where(r => !(r.TryGetProperty("draft", out var d) && d.ValueKind == JsonValueKind.True))
+                .Select(r => r.TryGetProperty("tag_name", out var t) ? t.GetString()?.TrimStart('v', 'V') : null)
+                .Select(v => System.Version.TryParse(v, out var x) ? x : null)
+                .Where(v => v != null)
+                .Max()?.ToString();
+        }
+        catch (Exception) { return null; }
+    }
+
     public static bool IsNewer(string remote, string local) =>
         System.Version.TryParse(remote, out var r) && System.Version.TryParse(local, out var l) && r > l;
 

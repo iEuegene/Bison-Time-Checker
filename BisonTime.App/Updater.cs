@@ -12,6 +12,7 @@ namespace BisonTime.App;
 internal static class Updater
 {
     const string Releases = "https://github.com/iEuegene/Bison-Time-Checker/releases";
+    const string Api = "https://api.github.com/repos/iEuegene/Bison-Time-Checker";
 
     static readonly HttpClient Http = CreateClient();
 
@@ -38,7 +39,11 @@ internal static class Updater
         try { manifest = await Http.GetByteArrayAsync($"{Releases}/latest/download/{Updates.ManifestName}"); }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
-            throw new InvalidDataException("Остання версія на GitHub вийшла без файлів для оновлення. Завантаж її вручну: кнопка «Релізи».");
+            // No signed release yet: compare with the newest tag, signed or not.
+            var json = await Http.GetStringAsync(Api + "/releases?per_page=20");
+            var newest = Updates.NewestVersion(json);
+            if (newest == null || !Updates.IsNewer(newest, Current)) return null;
+            throw new InvalidDataException($"Вийшла версія {newest}, але без файлів для оновлення в програмі. Завантаж її вручну: кнопка «Релізи».");
         }
         var signature = await Http.GetStringAsync($"{Releases}/latest/download/{Updates.SignatureName}");
         var m = Updates.ParseVerified(manifest, signature, UpdateKey.PublicKey)
