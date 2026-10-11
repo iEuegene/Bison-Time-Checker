@@ -12,7 +12,7 @@ export const GROUPS = [
 
 const MERGE_GAP = 2 * MIN;        // pieces closer than this read as one visit
 const COMMENT_MIN = 5 * MIN;      // a source enters the comment draft from 5 min a day
-const SUGGEST_MIN = 15 * MIN;     // an unknown domain is offered as a project from 15 min a day
+const SUGGEST_MIN = 5 * MIN;      // an unknown domain is offered as a project from 5 min a day
 const TOP_PAGES = 5;
 
 const CONTEXT_GAP = 15 * MIN;     // a task-manager page belongs to the project worked on within 15 min

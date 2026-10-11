@@ -56,11 +56,16 @@ async function load() {
   const segs = await tracker.daySegments(ui.day);
   const report = buildReport(segs, state, settings, got.docTitles || {});
   let current = null;
+  let currentDomain = null; // current tab is an unknown site: offer to make it a project
   if (ui.day === today && got.open) {
-    try { current = classify(got.open, settings, got.docTitles || {}).project; } catch { /* ignore */ }
+    try {
+      const c = classify(got.open, settings, got.docTitles || {});
+      current = c.project;
+      if (!c.project && c.rowKey.startsWith('dom:') && isDomainLike(c.domain)) currentDomain = c.domain;
+    } catch { /* ignore */ }
   }
   const off = await tracker.dayOff(ui.day);
-  data = { settings, state, report, current, today, paused: got.paused || null, off };
+  data = { settings, state, report, current, currentDomain, today, paused: got.paused || null, off };
 }
 
 async function updateDay(fn) {
@@ -124,9 +129,14 @@ function pauseBar() {
         h('div', { class: 'keys' }, 'Час не рахується, доки не продовжиш')),
       h('button', { class: 'btn primary big', onclick: () => setPaused(false) }, '▶  Продовжити'));
   }
+  const addCurrent = data.currentDomain
+    ? h('button', { class: 'btn primary', title: `Усе, що вже записано на ${data.currentDomain} сьогодні, перейде в проєкт`,
+      onclick: () => updateSettings((st) => { st.projects[data.currentDomain] = { aliases: [] }; }) }, `+ ${data.currentDomain}`)
+    : null;
   return h('div', { class: 'runbar' },
     h('span', { class: 'live' }),
-    h('span', { class: 'what' }, data.current ? `Облік іде · ${data.current}` : 'Облік іде'),
+    h('span', { class: 'what' }, data.current ? `Облік іде · ${data.current}` : data.currentDomain ? 'Цей сайт в «Інше»' : 'Облік іде'),
+    addCurrent,
     h('button', { class: 'btn pausebtn', title: 'Пауза (Alt+Shift+P)', onclick: () => setPaused(true) }, '❚❚  Пауза'));
 }
 
@@ -274,6 +284,10 @@ function otherEl() {
         if (isDomainLike(domain) && !t.tool) ui.ruleOffer = { key: t.key, project: v };
         updateDay((st) => { st.moved[t.key] = v; });
       }));
+      if (isDomainLike(domain) && !t.tool && t.rowKey.startsWith('dom:')) {
+        acts.append(h('button', { class: 'btn quiet', title: `Створити проєкт ${domain}: усі його записи перейдуть туди`, onclick: () =>
+          updateSettings((s) => { s.projects[domain] = { aliases: [] }; }) }, 'Це проєкт'));
+      }
       if (isDomainLike(domain) && !t.tool) {
         acts.append(h('button', { class: 'btn quiet', title: `Ніколи не записувати ${domain}`, onclick: () =>
           updateSettings((s) => { s.ignore = [...new Set([...s.ignore, domain])]; }) }, 'Ігнорувати домен'));

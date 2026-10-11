@@ -91,8 +91,8 @@ test('done mark clears when the total changes', () => {
   assert.deepEqual([d.marked, d.stale, d.diff], [false, true, 10]);
 });
 
-test('unknown domain over 15 min is suggested once, declined never', () => {
-  const segs = [seg(0, 16, 'https://newclient.ua/'), seg(16, 30, 'https://youtube.com/')];
+test('unknown domain from 5 min is suggested, declined never', () => {
+  const segs = [seg(0, 7, 'https://newclient.ua/'), seg(7, 11, 'https://youtube.com/')];
   assert.deepEqual(buildReport(segs, {}, settings).suggestions.map((s) => s.domain), ['newclient.ua']);
   assert.deepEqual(buildReport(segs, {}, { ...settings, declined: ['newclient.ua'] }).suggestions, []);
 });
