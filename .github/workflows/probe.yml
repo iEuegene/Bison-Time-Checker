@@ -1,0 +1,7 @@
+name: probe
+on: { push: { branches: [ci-probe] } }
+jobs:
+  p:
+    runs-on: windows-latest
+    steps:
+      - run: dotnet --list-sdks
