@@ -186,11 +186,24 @@ function dataTab() {
     ...header('Дані', 'Експорт містить лише проєкти, правила та ігнор — без історії й без адрес сторінок. Ним зручно поділитися з колегою: імпорт додає до наявного, нічого не стирає.'),
     h('div', { class: 'addrow' }, exportBtn, h('button', { class: 'btn', onclick: () => file.click() }, 'Імпорт…'), file),
     status,
+    h('h1', { style: 'font-size:16px;margin-top:34px' }, 'Журнал для діагностики'),
+    h('p', { class: 'lead' }, 'Останні 400 подій трекера: коли відкривався й закривався відрізок і чому. Лише домени й початок ID документа, без адрес і назв. Якщо час рахується дивно — скопіюй і надішли розробнику.'),
+    h('div', { class: 'addrow' }, h('button', { class: 'btn', onclick: async (e) => {
+      const { log = [] } = await chrome.storage.local.get(['log']);
+      const pad = (n) => String(n).padStart(2, '0');
+      const text = log.map((x) => {
+        const d = new Date(x.t);
+        const tm = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        return [tm, x.ev, x.where, x.why, x.sec != null ? `${x.sec}s` : ''].filter(Boolean).join(' ');
+      }).join('\n');
+      await navigator.clipboard.writeText(text || '(порожньо)');
+      e.target.textContent = `Скопійовано: ${log.length} подій`;
+    } }, 'Копіювати журнал')),
     h('h1', { style: 'font-size:16px;margin-top:34px' }, 'Очистити історію'),
     h('p', { class: 'lead' }, 'Видаляє всі записані відрізки, коментарі та позначки. Проєкти, правила й ігнор лишаються.'),
     confirmBtn('Очистити історію', async () => {
       const all = await chrome.storage.local.get(null);
-      const keys = Object.keys(all).filter((k) => k.startsWith('seg:') || k.startsWith('day:') || ['open', 'docTitles', 'idlePending'].includes(k));
+      const keys = Object.keys(all).filter((k) => k.startsWith('seg:') || k.startsWith('day:') || ['open', 'docTitles', 'idlePending', 'log', 'off'].includes(k) || k.startsWith('off:'));
       await chrome.storage.local.remove(keys);
       status.textContent = 'Історію очищено.';
     }, 'btn danger'),

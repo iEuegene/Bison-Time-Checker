@@ -15,6 +15,7 @@ const ui = {
   open: new Set(),          // expanded project cards
   pages: new Set(),         // expanded "Сайт" rows
   otherOpen: false,
+  showShort: false,       // show <1 min visits in Інше
   ruleOffer: null,          // {domain, project} after a manual move
   copied: null,
 };
@@ -234,10 +235,26 @@ function cardEl(p) {
 function otherEl() {
   const tl = data.report.timeline;
   if (!tl.some((t) => t.kind === 'other')) return null;
-  const items = [];
+  // Visits under a minute are noise for the memory aid: fold them away by default,
+  // and glue project sessions that only they separated.
+  const visible = [];
+  let hidden = 0;
   for (const t of tl) {
+    if (t.kind === 'other' && !t.moved && t.ms < MIN && !ui.showShort) { hidden++; continue; }
+    const last = visible.at(-1);
+    if (t.kind === 'session' && last?.kind === 'session' && last.project === t.project) {
+      visible[visible.length - 1] = { ...last, e: Math.max(last.e, t.e) };
+      continue;
+    }
+    visible.push(t);
+  }
+  const items = [];
+  for (const t of visible) {
     if (t.kind === 'session') {
-      items.push(h('div', { class: 'sess' }, `${clock(t.s)}–${clock(t.e)} · ${t.project}`));
+      items.push(h('div', { class: 'sess', title: `Робота над ${t.project}, ${clock(t.s)}–${clock(t.e)} — уже в проєкті` },
+        h('span', { class: 'tm' }, clock(t.s)),
+        h('span', { class: 'proj' }, h('i', {}), t.project, h('small', {}, ' · у проєкті')),
+        h('span', { class: 'dur' }, `до ${clock(t.e)}`)));
       continue;
     }
     const domain = t.domain;
@@ -272,7 +289,9 @@ function otherEl() {
   const det = h('details', { class: 'other', open: ui.otherOpen ? true : null,
     ontoggle: (e) => { ui.otherOpen = e.target.open; } },
     h('summary', {}, 'Інше', h('span', { class: 'n' }, formatExact(data.report.otherMs)), chevron()),
-    h('div', { class: 'tl' }, items));
+    h('div', { class: 'tl' }, items,
+      hidden || ui.showShort ? h('button', { class: 'more short', onclick: () => { ui.showShort = !ui.showShort; render(); } },
+        ui.showShort ? 'сховати короткі відвідування' : `ще ${hidden} коротких відвідувань (<1 хв)`) : null));
   return det;
 }
 

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Bison Time Checker",
   "short_name": "BT",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Облік часу по проєктах для щоденного звіту Inweb. Дані не залишають ваш комп'ютер.",
   "minimum_chrome_version": "116",
   "permissions": ["tabs", "idle", "alarms", "storage"],

@@ -83,8 +83,14 @@ main { padding: 10px 10px 14px; display: flex; flex-direction: column; gap: 8px;
 .other > summary .n { margin-left: auto; font-variant-numeric: tabular-nums; }
 .other[open] > summary .chev { transform: rotate(180deg); }
 .tl { padding: 0 12px 10px; }
-.tl .sess { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 11px; padding: 6px 0 4px; }
-.tl .sess::before { content: ''; width: 3px; height: 12px; background: var(--lime); transform: skewX(var(--skew)); opacity: .7; }
+.tl .sess { display: grid; grid-template-columns: 42px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-size: 12px; }
+.tl .sess:first-child { border-top: 0; }
+.tl .sess .tm { color: var(--faint); font-variant-numeric: tabular-nums; }
+.tl .sess .proj { display: flex; align-items: center; gap: 7px; color: var(--lime); font-weight: 500; min-width: 0; }
+.tl .sess .proj i { width: 3px; height: 12px; background: var(--lime); transform: skewX(var(--skew)); flex: none; }
+.tl .sess .proj small { color: var(--faint); font-weight: 400; font-size: 11px; }
+.tl .sess .dur { color: var(--faint); }
+.tl .short { display: block; margin: 8px 0 2px; }
 .tl .ent { display: grid; grid-template-columns: 42px 1fr auto; gap: 2px 8px; padding: 6px 0; border-top: 1px solid var(--line); }
 .tl .ent .tm { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
 .tl .ent .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

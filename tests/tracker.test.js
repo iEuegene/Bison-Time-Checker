@@ -57,7 +57,7 @@ test('time while Chrome is unfocused is not counted', async () => {
   assert.equal(total(store.data[`seg:${day}`]), 10);
 });
 
-test('idle: segment closes at last activity, prompt appears with the idle minutes', async () => {
+test('idle: minutes before the idle event stay counted; prompt covers the time after it', async () => {
   const { store, tr, tick, clock, day } = setup();
   await store.set({ settings: { projects: { 'shop.com.ua': { aliases: [] } } } });
   await tr.observe(SITE);
@@ -65,10 +65,10 @@ test('idle: segment closes at last activity, prompt appears with the idle minute
   await tr.idle('idle', 180);
   await tick(7);
   await tr.idle('active', 180);
-  assert.equal(total(store.data[`seg:${day}`]), 10);
+  assert.equal(total(store.data[`seg:${day}`]), 13);
   const idle = store.data[`day:${day}`].idle;
   assert.equal(idle.length, 1);
-  assert.equal((idle[0].e - idle[0].s) / MIN, 10);
+  assert.equal((idle[0].e - idle[0].s) / MIN, 7);
   assert.equal(idle[0].project, 'shop.com.ua');
   assert.equal(idle[0].e, clock.t);
 });
@@ -105,7 +105,7 @@ test('sleep while idle is not offered back as idle time', async () => {
   await tr.heartbeat();
   await tr.idle('active', 180);
   const idle = store.data[`day:${day}`].idle;
-  assert.equal((idle[0].e - idle[0].s) / MIN, 5);
+  assert.equal((idle[0].e - idle[0].s) / MIN, 2);
 });
 
 test('flicks under 5 s are dropped; incognito and ignored domains never recorded', async () => {
@@ -181,5 +181,16 @@ test('off reasons: other app and idle are listed, overnight is not', async () =>
   await tick(1);
   const off = await tr.dayOff(day);
   assert.equal(off.focus / MIN, 12);
-  assert.equal(off.idle / MIN, 7);
+  assert.equal(off.idle / MIN, 4);
+});
+
+test('regression: reading a sheet 4 min with sparse input keeps all 4 min', async () => {
+  const { store, tr, tick, day } = setup();
+  const SHEET = { url: 'https://docs.google.com/spreadsheets/d/abcdefghijk2/edit?gid=1#gid=1', title: 'shop.com.ua / Outreach / Content Strategy - Google Sheets' };
+  await tr.observe(SHEET);
+  await tick(1);
+  await tr.observe({ ...SHEET, url: SHEET.url.replace('gid=1#gid=1', 'gid=2#gid=2') }); // switching sheet tabs
+  await tick(3);
+  await tr.observe(null);
+  assert.equal(total(store.data[`seg:${day}`]), 4);
 });

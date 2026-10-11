@@ -10,6 +10,7 @@ export const MIN_IDLE_PROMPT = MIN;    // idle under a minute is not worth askin
 export const MIN_OFF = MIN;            // untracked stretches under a minute are not listed
 export const KEEP_SEGMENTS_DAYS = 7;
 export const KEEP_DAY_STATE_DAYS = 30;
+export const LOG_SIZE = 400;
 
 /** Why nothing is being counted. Shown in the popup as "поза обліком". */
 export const OFF_REASONS = {
@@ -72,9 +73,21 @@ export function createTracker({ store, now = () => Date.now() }) {
     }
   }
 
+  /** Diagnostics ring buffer: domain / doc id only, never full URLs or titles. */
+  async function log(ev, open, extra = {}) {
+    const { log: list = [] } = await store.get(['log']);
+    let where = '';
+    if (open?.url) {
+      try { const u = new URL(open.url); where = docIdOf(open.url) ? `doc:${docIdOf(open.url).slice(0, 6)}` : u.hostname; } catch { where = '?'; }
+    }
+    list.push({ t: now(), ev, where, ...extra });
+    await store.set({ log: list.slice(-LOG_SIZE) });
+  }
+
   /** Write [open.s, end) into per-day segment lists; auto-create projects named by docs. */
-  async function close(open, end) {
+  async function close(open, end, why = '') {
     const e = Math.max(open.s, Math.min(end, now()));
+    await log('close', open, { why, sec: Math.round((e - open.s) / 1000) });
     if (e - open.s < MIN_SEGMENT) return;
     await appendDay('seg', open.s, e, { url: open.url, title: open.title });
     const s = await settings();
@@ -106,7 +119,7 @@ export function createTracker({ store, now = () => Date.now() }) {
   /** Drop a segment whose heartbeat went stale: close it where the heartbeat stopped. */
   async function settleStale(open) {
     if (open && now() - open.beat > GAP) {
-      await close(open, open.beat);
+      await close(open, open.beat, 'stale');
       await store.set({ open: null });
       return null;
     }
@@ -137,13 +150,15 @@ export function createTracker({ store, now = () => Date.now() }) {
         await store.set({ open: { ...open, url: want.url, title: want.title || open.title, beat: t } });
         return;
       }
-      if (open) await close(open, t);
+      if (open) await close(open, t, want ? 'switch' : 'stop');
       if (want) {
         await endOff(t);
+        await log('open', want);
         await store.set({ open: { s: t, url: want.url, title: want.title || '', beat: t } });
       } else {
         await store.set({ open: null });
         const reason = paused ? 'pause' : idleState === 'idle' ? 'idle' : idleState === 'locked' ? 'lock' : !tab ? 'focus' : 'untracked';
+        if (open) await log('off', null, { why: reason });
         await startOff(reason, t);
       }
     }),
@@ -177,21 +192,23 @@ export function createTracker({ store, now = () => Date.now() }) {
     /** chrome.idle state change. `idleSec` = the detection interval in force. */
     idle: (state, idleSec) => serial(async () => {
       const t = now();
+      await log('idle-state', null, { why: state, sec: idleSec });
       let { open = null, idlePending = null } = await store.get(['open', 'idlePending']);
       open = await settleStale(open);
 
       if (state === 'idle') {
         if (open) {
-          const end = Math.max(open.s, t - idleSec * 1000);
-          await close(open, end);
-          idlePending = { s: end, beat: t, project: await projectOf(open) };
-          await startOff('idle', end);
+          // The minutes before the idle event stay counted: reading a sheet without touching
+          // the mouse is work, and Chrome's idle interval is not reliable enough to cut back by.
+          await close(open, t, 'idle');
+          idlePending = { s: t, beat: t, project: await projectOf(open) };
+          await startOff('idle', t);
         }
         await store.set({ open: null, idleState: 'idle', idlePending });
         return;
       }
       if (state === 'locked') {
-        if (open) await close(open, t);
+        if (open) await close(open, t, 'lock');
         await startOff('lock', t);
         await store.set({ open: null, idleState: 'locked', idlePending: null });
         return;
@@ -216,7 +233,7 @@ export function createTracker({ store, now = () => Date.now() }) {
       let { open = null, paused = null } = await store.get(['open', 'paused']);
       if (paused) return;
       open = await settleStale(open);
-      if (open) await close(open, t);
+      if (open) await close(open, t, 'pause');
       await store.set({ open: null, paused: { s: t } });
       await startOff('pause', t);
     }),
@@ -231,6 +248,7 @@ export function createTracker({ store, now = () => Date.now() }) {
       const all = await store.get(null);
       const segLimit = shiftDay(today, -(KEEP_SEGMENTS_DAYS - 1));
       const dayLimit = shiftDay(today, -(KEEP_DAY_STATE_DAYS - 1));
+      if (Array.isArray(all.log) && all.log.length > LOG_SIZE) await store.set({ log: all.log.slice(-LOG_SIZE) });
       const drop = Object.keys(all).filter((k) =>
         ((k.startsWith('seg:') || k.startsWith('off:')) && k.slice(4) < segLimit) || (k.startsWith('day:') && k.slice(4) < dayLimit));
       if (drop.length) await store.remove(drop);
