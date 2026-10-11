@@ -194,3 +194,11 @@ test('regression: reading a sheet 4 min with sparse input keeps all 4 min', asyn
   await tr.observe(null);
   assert.equal(total(store.data[`seg:${day}`]), 4);
 });
+
+test('a Planfix task for an unknown client creates the project when recorded', async () => {
+  const { store, tr, tick } = setup();
+  await tr.observe({ url: 'https://inweb.planfix.com/task/1', title: 'newclient.eu - SEO-комплекс' });
+  await tick(2);
+  await tr.observe(null);
+  assert.ok(store.data.settings.projects['newclient.eu']);
+});

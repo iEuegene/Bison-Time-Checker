@@ -176,16 +176,36 @@ export function classify(tab, settings, docTitles = {}, idx = projectIndex(setti
   // swallow pages that name a client in their title, so the title goes first.
   if (ruleProject && !rule.whole) return linked();
   // A project domain in the page title (task trackers, CRMs, search for the client) = work on it.
-  const named = projectInTitle(tab.title, idx);
+  let named = projectInTitle(tab.title, idx);
+  // In a task manager every task is named after its client, known or not: "covere2.eu - SEO-комплекс".
+  if (!named && isWorkTool(host, settings)) {
+    const d = firstDomainIn(tab.title);
+    if (d) named = { project: resolveDomain(d, idx) || d, match: d, fresh: !resolveDomain(d, idx) };
+  }
   if (named) {
     const label = cleanTitle(tab.title, named.match) || domain;
-    return { ...base, group: 'linked', project: named.project, rowKey: `title:${domain}|${label}`, label, task: domain };
+    return { ...base, group: 'linked', project: named.project, rowKey: `title:${domain}|${label}`, label, task: domain,
+      autoProject: !!named.fresh };
   }
   if (ruleProject) return linked();
   return { ...base, group: 'other', project: null, rowKey: `dom:${domain}`, label: domain };
 }
 
 const TOKEN_EDGE = '[^\\p{L}\\p{N}.-]';
+
+/** Task managers serving every project (Planfix…): settings.workTools. */
+export function isWorkTool(host, settings) {
+  return (settings.workTools || []).some((d) => hostIs(host, String(d).toLowerCase()));
+}
+
+/** First domain-looking token of a title: "covere2.eu - SEO-комплекс" -> "covere2.eu". */
+export function firstDomainIn(title) {
+  for (const raw of (title || '').split(/[\s/|,()«»"'·•:]+/u)) {
+    const d = normalizeDomain(raw.replace(/[.\-–—]+$/u, ''));
+    if (d) return d;
+  }
+  return '';
+}
 
 /** First known project domain (or domain alias) written in a title, as a whole token. */
 export function projectInTitle(title, idx) {

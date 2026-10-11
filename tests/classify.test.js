@@ -131,3 +131,14 @@ test('whole-domain rule does not swallow pages that name a client in the title',
   const urlRule = { ...s, rules: [{ match: 'planfix.com/task/57', project: 'Inweb' }] };
   assert.equal(classify({ url: 'https://inweb.planfix.com/task/57', title: 'paramedic.ua - ТЗ' }, urlRule).project, 'Inweb');
 });
+
+test('task manager: a domain at the start of a task title names a project, even a new one', () => {
+  const s = { ...settings, workTools: ['planfix.com'] };
+  const c = classify({ url: 'https://inweb.planfix.com/task/3382756', title: 'covere2.eu - SEO-комплекс (Перший етап) / Пошукова оптимізація' }, s);
+  assert.deepEqual([c.project, c.group, c.autoProject], ['covere2.eu', 'linked', true]);
+  assert.equal(c.label, 'SEO-комплекс (Перший етап) / Пошукова оптимізація');
+  // the same title on a random site does not invent a project
+  assert.equal(classify({ url: 'https://blog.example.org/', title: 'covere2.eu - огляд' }, s).project, null);
+  // planner without a domain: nothing here, context inference does the rest
+  assert.equal(classify({ url: 'https://inweb.planfix.com/planner', title: 'Bison / Планувальник / inweb' }, s).project, null);
+});

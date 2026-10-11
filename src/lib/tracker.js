@@ -94,7 +94,7 @@ export function createTracker({ store, now = () => Date.now() }) {
     const s = await settings();
     const { docTitles = {} } = await store.get(['docTitles']);
     const c = classify(open, s, docTitles);
-    if (c.group === 'docs' && c.project && !s.projects[c.project] && normalizeDomain(c.project)) {
+    if ((c.group === 'docs' || c.autoProject) && c.project && !s.projects[c.project] && normalizeDomain(c.project)) {
       s.projects[c.project] = { aliases: [] };
       await store.set({ settings: s });
     }

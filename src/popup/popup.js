@@ -1,5 +1,5 @@
 import { buildReport, emptyDayState } from '../lib/report.js';
-import { classify, isDomainLike } from '../lib/classify.js';
+import { classify, isDomainLike, isWorkTool } from '../lib/classify.js';
 import { createTracker, withDefaults, KEEP_SEGMENTS_DAYS, OFF_REASONS } from '../lib/tracker.js';
 import { dayKey, shiftDay, formatReport, formatExact, clock, MIN } from '../lib/time.js';
 
@@ -61,7 +61,7 @@ async function load() {
     try {
       const c = classify(got.open, settings, got.docTitles || {});
       current = c.project;
-      if (!c.project && c.rowKey.startsWith('dom:') && isDomainLike(c.domain)) currentDomain = c.domain;
+      if (!c.project && c.rowKey.startsWith('dom:') && isDomainLike(c.domain) && !isWorkTool(c.host, settings)) currentDomain = c.domain;
     } catch { /* ignore */ }
   }
   const off = await tracker.dayOff(ui.day);
@@ -284,7 +284,7 @@ function otherEl() {
         if (isDomainLike(domain) && !t.tool) ui.ruleOffer = { key: t.key, project: v };
         updateDay((st) => { st.moved[t.key] = v; });
       }));
-      if (isDomainLike(domain) && !t.tool && t.rowKey.startsWith('dom:')) {
+      if (isDomainLike(domain) && !t.tool && t.rowKey.startsWith('dom:') && !isWorkTool(domain, data.settings)) {
         acts.append(h('button', { class: 'btn quiet', title: `Створити проєкт ${domain}: усі його записи перейдуть туди`, onclick: () =>
           updateSettings((s) => { s.projects[domain] = { aliases: [] }; }) }, 'Це проєкт'));
       }

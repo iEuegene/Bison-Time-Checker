@@ -212,7 +212,8 @@ export function buildReport(segs, state, settings, docTitles = {}, opts = {}) {
   }
   const declined = new Set(settings.declined || []);
   const suggestions = [...byDomain.entries()]
-    .filter(([d, ms]) => ms >= SUGGEST_MIN && !declined.has(d) && !(settings.projects || {})[d])
+    .filter(([d, ms]) => ms >= SUGGEST_MIN && !declined.has(d) && !(settings.projects || {})[d]
+      && !(settings.workTools || []).some((w) => d === w || d.endsWith('.' + w)))
     .sort((a, b) => b[1] - a[1])
     .map(([domain, ms]) => ({ domain, ms }));
 
