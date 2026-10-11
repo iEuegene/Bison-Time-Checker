@@ -1,0 +1,39 @@
+name: build
+
+on:
+  push:
+    branches: [main, desktop]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Core tests
+        run: dotnet run --project BisonTime.Tests -c Release
+
+      - name: Publish single-file exe
+        run: >
+          dotnet publish BisonTime.App/BisonTime.App.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          -o out
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          $v = (Select-Xml -Path BisonTime.App/BisonTime.App.csproj -XPath "//Version").Node.InnerText
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path out/BisonTimeChecker.exe -DestinationPath "dist/BisonTimeChecker-$v-win-x64.zip"
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BisonTimeChecker-${{ env.VERSION }}-win-x64
+          path: dist/*.zip

@@ -1,14 +1,14 @@
 """Draws the BT brand mark: lime Inweb parallelogram + green "BT" in Unbounded Bold.
 
 Same geometry as Bison Switcher's tray icon (Windows/Services/TrayIcons.cs, DrawBrandMark),
-scaled from its 32 px drawing. Usage: python3 tools/make-icons.py
+scaled from its 32 px drawing. Usage: python3 tools/make-icons.py  (writes BisonTime.App/Assets/*.ico, *.png)
 """
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-FONT = ROOT / "src/fonts/Unbounded-Bold.ttf"
-OUT = ROOT / "src/icons"
+FONT = ROOT / "BisonTime.App/Fonts/Unbounded-Bold.ttf"
+OUT = ROOT / "BisonTime.App/Assets"
 LIME = (0xF0, 0xFC, 0x7E, 255)
 ORANGE = (0xEF, 0x58, 0x3D, 255)
 GREEN = (0x00, 0x3B, 0x29, 255)
@@ -38,7 +38,10 @@ def mark(size: int, paused: bool = False) -> Image.Image:
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
-    for size in (16, 32, 48, 128):
-        mark(size).save(OUT / f"bt-{size}.png")
-        mark(size, paused=True).save(OUT / f"bt-paused-{size}.png")
+    sizes = (16, 20, 24, 32, 40, 48, 64, 128, 256)
+    for paused, name in ((False, "bt"), (True, "bt-paused")):
+        # ICO with every size drawn natively (not just downscaled from 256) for a crisp tray icon.
+        frames = [mark(n, paused) for n in sizes]
+        frames[-1].save(OUT / f"{name}.ico", format="ICO", sizes=[(n, n) for n in sizes], append_images=frames[:-1])
+        mark(64, paused).save(OUT / f"{name}-64.png")
     print("icons written to", OUT)

@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms only for the tray NotifyIcon. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\bt.ico</ApplicationIcon>
+    <AssemblyName>BisonTimeChecker</AssemblyName>
+    <RootNamespace>BisonTime.App</RootNamespace>
+    <Product>Bison Time Checker</Product>
+    <Description>Bison Time Checker (BT) — облік часу по проєктах для щоденного звіту Inweb</Description>
+    <Version>1.0.0</Version>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BisonTime.Core\BisonTime.Core.csproj" />
+  </ItemGroup>
+
+  <!-- WinForms/Drawing names (Button, Brush, Point…) collide with WPF: keep them out of
+       the implicit usings and write them fully qualified where needed. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <!-- Brand fonts (OFL): Geist for text, Unbounded for headlines and numbers. -->
+  <ItemGroup>
+    <Resource Include="Fonts\*.ttf" />
+    <Resource Include="Assets\*.png" />
+    <EmbeddedResource Include="Assets\bt.ico" LogicalName="bt.ico" />
+    <EmbeddedResource Include="Assets\bt-paused.ico" LogicalName="bt-paused.ico" />
+  </ItemGroup>
+
+</Project>

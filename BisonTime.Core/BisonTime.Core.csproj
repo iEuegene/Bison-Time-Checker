@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Platform-neutral logic: classification, tracking, report. No package
+       references and no Windows APIs, so it builds and tests on any OS. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>BisonTime.Core</RootNamespace>
+    <LangVersion>12</LangVersion>
+  </PropertyGroup>
+
+</Project>
