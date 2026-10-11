@@ -2,9 +2,12 @@ name: build
 
 on:
   push:
-    branches: [main, desktop]
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write   # the release step publishes the exe on pushes to main
 
 jobs:
   windows:
@@ -37,3 +40,18 @@ jobs:
         with:
           name: BisonTimeChecker-${{ env.VERSION }}-win-x64
           path: dist/*.zip
+
+      - name: Release (main only)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "v$env:VERSION"
+          $zip = (Get-ChildItem dist/*.zip).FullName
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $zip --clobber
+          } else {
+            gh release create $tag $zip --prerelease --title "Bison Time Checker $env:VERSION" --notes-file RELEASE_NOTES.md
+          }
