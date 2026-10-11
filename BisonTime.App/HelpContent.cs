@@ -81,6 +81,7 @@ internal static class HelpContent
     /// <summary>What changed, newest first. One line per release, written for colleagues, not developers.</summary>
     public static readonly (string Version, string Text)[] Changes =
     {
+        ("1.2.2", "Файли для оновлення лежать в окремому службовому релізі, тож сторінки версій на GitHub знову чисті: zip і все."),
         ("1.2.1", "«Перевірити оновлення» показує, що у тебе остання версія, а не помилку, поки на GitHub немає підписаних оновлень."),
         ("1.2.0", "Оновлення в один клік: BT сам перевіряє нову версію й завантажує лише змінені файли, з перевіркою підпису."),
         ("1.1.0", "Розділ «Довідка» в налаштуваннях: інструкція, що нового, ліцензія та посилання."),

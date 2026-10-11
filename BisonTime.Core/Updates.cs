@@ -25,6 +25,8 @@ public static class Updates
 {
     public const string ManifestName = "manifest.json";
     public const string SignatureName = "manifest.json.sig";
+    /// <summary>Service release holding the files of the current manifest, named by SHA-256.</summary>
+    public const string StoreTag = "update-files";
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 

@@ -60,6 +60,8 @@ jobs:
 
       # Signed builds become the "latest" release the app updates from. Without the signing key
       # the release stays a prerelease, so the app never sees a version it cannot verify.
+      # The version release carries only the zip and the signed manifest; the files themselves
+      # (named by SHA-256) live in one service release, uploaded once and shared by all versions.
       - name: Release (main only)
         if: github.ref == 'refs/heads/main'
         env:
@@ -67,26 +69,50 @@ jobs:
         shell: pwsh
         run: |
           $tag = "v$env:VERSION"
-          $assets = @((Get-ChildItem dist/*.zip).FullName)
+          $store = "update-files"
+          $zip = (Get-ChildItem dist/*.zip).FullName
           $signed = Test-Path dist/update/manifest.json
-          if ($signed) {
-            $assets += (Get-ChildItem dist/update/files/*).FullName
-          }
+          function Assets($t) { @(gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$t" --jq '.assets[] | .name') }
+
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --prerelease --title "Bison Time Checker $env:VERSION" --notes-file RELEASE_NOTES.md
-            if ($LASTEXITCODE -ne 0) { exit 1 }
           }
-          # Files first, manifest last: a client never sees a manifest whose files are not there yet.
-          for ($i = 0; $i -lt $assets.Count; $i += 50) {
-            $batch = $assets[$i..([Math]::Min($i + 49, $assets.Count - 1))]
-            gh release upload $tag @batch --clobber
-            if ($LASTEXITCODE -ne 0) { exit 1 }
-          }
-          if ($signed) {
-            gh release upload $tag dist/update/manifest.json dist/update/manifest.json.sig --clobber
-            if ($LASTEXITCODE -ne 0) { exit 1 }
-            gh release edit $tag --prerelease=false --latest
-          } else {
+          gh release upload $tag $zip --clobber
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          if (-not $signed) {
             Write-Host "::warning::BT_SIGNING_KEY is not set: released as prerelease without in-app update files"
+            exit 0
+          }
+
+          gh release view $store *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $store --prerelease --latest=false --title "Файли оновлень (службовий)" --notes "Службовий реліз: файли, які Bison Time Checker завантажує під час оновлення в програмі. Звідси нічого завантажувати не треба — програма лежить у релізах з номером версії."
+          }
+          $have = Assets $store
+          $need = Get-ChildItem dist/update/files | Where-Object { $have -notcontains $_.Name }
+          Write-Host "store: $($have.Count) present, $($need.Count) to upload"
+          for ($i = 0; $i -lt $need.Count; $i += 50) {
+            $batch = $need[$i..([Math]::Min($i + 49, $need.Count - 1))].FullName
+            gh release upload $store @batch --clobber
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
+          # Files first, manifest last: a client never sees a manifest whose files are not there yet.
+          gh release upload $tag dist/update/manifest.json dist/update/manifest.json.sig --clobber
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          gh release edit $tag --prerelease=false --latest
+
+          # Clients always update to the newest manifest, so older files are dead weight.
+          $keep = Get-ChildItem dist/update/files | ForEach-Object Name
+          foreach ($n in (Assets $store)) {
+            if ($keep -notcontains $n) { gh release delete-asset $store $n -y }
+          }
+          # Version releases from before the service release carried the files themselves.
+          foreach ($t in @(gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=50" --jq '.[].tag_name')) {
+            if ($t -eq $store) { continue }
+            foreach ($n in (Assets $t)) {
+              if ($n -match '^[0-9a-f]{64}$') { gh release delete-asset $t $n -y }
+            }
           }

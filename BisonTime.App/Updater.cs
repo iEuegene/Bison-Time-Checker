@@ -77,7 +77,12 @@ internal static class Updater
             var tmp = Path.Combine(DownloadDir, f.Sha256);
             if (!File.Exists(tmp) || Updates.Sha256File(tmp) != f.Sha256)
             {
-                var bytes = await Http.GetByteArrayAsync($"{Releases}/download/v{a.Manifest.Version}/{f.Sha256}");
+                byte[] bytes;
+                try { bytes = await Http.GetByteArrayAsync($"{Releases}/download/{Updates.StoreTag}/{f.Sha256}"); }
+                catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    bytes = await Http.GetByteArrayAsync($"{Releases}/download/v{a.Manifest.Version}/{f.Sha256}");
+                }
                 if (Updates.Sha256(bytes) != f.Sha256) throw new InvalidDataException($"Файл {f.Path} пошкоджено під час завантаження.");
                 await File.WriteAllBytesAsync(tmp, bytes);
             }
