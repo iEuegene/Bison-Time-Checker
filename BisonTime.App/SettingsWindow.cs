@@ -13,7 +13,7 @@ internal sealed class SettingsWindow : Window
 {
     static readonly (string Title, string Glyph)[] Tabs =
     {
-        ("Проєкти", ""), ("Правила", ""), ("Ігнор", ""), ("Облік", ""), ("Дані", ""),
+        ("Проєкти", ""), ("Правила", ""), ("Ігнор", ""), ("Облік", ""), ("Дані", ""), ("Довідка", ""),
     };
 
     int _tab;
@@ -95,7 +95,8 @@ internal sealed class SettingsWindow : Window
             case 1: RulesPage(); break;
             case 2: IgnorePage(); break;
             case 3: TrackingPage(); break;
-            default: DataPage(); break;
+            case 4: DataPage(); break;
+            default: HelpPage(); break;
         }
     }
 
@@ -197,7 +198,7 @@ internal sealed class SettingsWindow : Window
 
     void RulesPage()
     {
-        H1("Правила", "Коли домену клієнта немає в заголовку вікна. Фрагмент заголовка («Looker Studio», «Звіт Ahrefs ti.ua») або назва програми " +
+        H1("Правила", "Коли домену клієнта немає в заголовку вікна. Фрагмент заголовка («Looker Studio», «Звіт Ahrefs») або назва програми " +
             "(figma, excel) → проєкт. Правило за заголовком перевіряється першим; правило на всю програму поступається домену клієнта в заголовку.");
         var items = _s.Rules.Select((r, i) => (UIElement)Cols("*,Auto",
             Col(2, T(r.Match, 13, weight: FontWeights.SemiBold), T($"→ {r.Project}", 12, "MutedBrush")),
@@ -281,5 +282,44 @@ internal sealed class SettingsWindow : Window
             App.Tracker.Reset();
             status.Text = "Історію очищено.";
         }));
+    }
+
+    static void Open(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch { /* no browser */ }
+    }
+
+    void HelpPage()
+    {
+        var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "";
+        H1("Довідка", HelpContent.Made);
+
+        // About: version, copyright, links
+        _page.Children.Add(ListCard(new UIElement[]
+        {
+            Cols("*,Auto", Col(3, T($"Bison Time Checker {version}", 14, weight: FontWeights.SemiBold), T(HelpContent.Copyright + " · ліцензія MIT", 12, "MutedBrush")),
+                HRow(Btn("GitHub", "Ghost", () => Open(HelpContent.Repo), HelpContent.Repo),
+                     Btn("Оновлення", "Ghost", () => Open(HelpContent.Releases), "Нові версії на GitHub").M(6, 0, 0, 0),
+                     Btn("Повідомити про проблему", "Ghost", () => Open(HelpContent.Issues)).M(6, 0, 0, 0))),
+        }, ""));
+
+        foreach (var (title, lines) in HelpContent.Guide)
+        {
+            _page.Children.Add(T(title, 16, display: true, weight: FontWeights.Bold).M(0, 28, 0, 8));
+            foreach (var line in lines)
+            {
+                if (line.StartsWith("• "))
+                    _page.Children.Add(Cols("18,*", T("•", 13, "LimeBrush"), T(line[2..], 13, wrap: true)).M(0, 0, 0, 6));
+                else
+                    _page.Children.Add(T(line, 13, wrap: true).M(0, 0, 0, 8));
+            }
+        }
+
+        _page.Children.Add(T("Що нового", 16, display: true, weight: FontWeights.Bold).M(0, 28, 0, 8));
+        _page.Children.Add(ListCard(HelpContent.Changes.Select(c =>
+            (UIElement)Cols("70,*", T(c.Version, 13, "LimeBrush", FontWeights.SemiBold), T(c.Text, 13, wrap: true))), ""));
+
+        _page.Children.Add(T("Правова інформація", 16, display: true, weight: FontWeights.Bold).M(0, 28, 0, 8));
+        foreach (var line in HelpContent.Legal) _page.Children.Add(T(line, 12, "MutedBrush", wrap: true).M(0, 0, 0, 8));
     }
 }

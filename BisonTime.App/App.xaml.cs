@@ -106,6 +106,7 @@ public partial class App : Application
         _pauseItem = new WinForms.ToolStripMenuItem("Пауза", null, (_, _) => TogglePause()) { ShortcutKeyDisplayString = "Alt+Shift+P" };
         menu.Items.Add(_pauseItem);
         menu.Items.Add("Налаштування", null, (_, _) => ShowSettings());
+        menu.Items.Add("Довідка", null, (_, _) => ShowSettings(5));
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("Вийти з Bison Time Checker", null, (_, _) => Shutdown());
         _tray = new WinForms.NotifyIcon { Icon = _iconNormal, Visible = true, Text = "Bison Time Checker", ContextMenuStrip = menu };

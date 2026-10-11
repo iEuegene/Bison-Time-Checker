@@ -51,9 +51,9 @@ Test("midnight split", () =>
 // ---------------- classify ----------------
 Test("browser suffix and counters are cut", () =>
 {
-    Eq("covere2.eu - SEO-комплекс", Classifier.Clean("(3) covere2.eu - SEO-комплекс - Google Chrome", true));
+    Eq("gamma2.eu - SEO-комплекс", Classifier.Clean("(3) gamma2.eu - SEO-комплекс - Google Chrome", true));
     Eq("Inbox", Classifier.Clean("Inbox - Робочий - Microsoft​ Edge", true).Replace(" - Робочий", ""));
-    Eq("ti.ua outreach.xlsx", Classifier.Clean("ti.ua outreach.xlsx - Excel", false));
+    Eq("beta.ua outreach.xlsx", Classifier.Clean("beta.ua outreach.xlsx - Excel", false));
 });
 Test("Google Docs convention in Chrome: project, doc, task", () =>
 {
@@ -72,36 +72,36 @@ Test("internal Inweb doc; random first segment is other", () =>
 });
 Test("known project domain anywhere in a title (Planfix task, Excel file)", () =>
 {
-    var s = S("paramedic.ua", "ti.ua");
-    var a = C("chrome", "paramedic.ua - SEO-комплекс(KPI) / Технічне завдання №57 - Google Chrome", s);
-    Eq("paramedic.ua", a.Project); Eq("web", a.Group); Eq("SEO-комплекс(KPI) / Технічне завдання №57", a.Label);
-    var x = C("excel", "ti.ua outreach.xlsx - Excel", s);
-    Eq("ti.ua", x.Project); Eq("apps", x.Group);
-    Eq(null, C("chrome", "myparamedic.ua news - Google Chrome", s).Project);
-    Eq(null, C("chrome", "paramedic.uax - Google Chrome", s).Project);
+    var s = S("alpha-med.ua", "beta.ua");
+    var a = C("chrome", "alpha-med.ua - SEO-комплекс(KPI) / Технічне завдання №57 - Google Chrome", s);
+    Eq("alpha-med.ua", a.Project); Eq("web", a.Group); Eq("SEO-комплекс(KPI) / Технічне завдання №57", a.Label);
+    var x = C("excel", "beta.ua outreach.xlsx - Excel", s);
+    Eq("beta.ua", x.Project); Eq("apps", x.Group);
+    Eq(null, C("chrome", "myalpha-med.ua news - Google Chrome", s).Project);
+    Eq(null, C("chrome", "alpha-med.uax - Google Chrome", s).Project);
 });
 Test("leading domain + separator names a client even if new; file names never do", () =>
 {
-    var c = C("chrome", "covere2.eu - SEO-комплекс (Перший етап) - Google Chrome", S());
-    Eq("covere2.eu", c.Project); True(c.AutoProject, "auto");
+    var c = C("chrome", "gamma2.eu - SEO-комплекс (Перший етап) - Google Chrome", S());
+    Eq("gamma2.eu", c.Project); True(c.AutoProject, "auto");
     Eq(null, C("excel", "report.xlsx - Excel", S()).Project);
     Eq(null, C("winword", "brief.docx - Word", S()).Project);
 });
 Test("aliases and subdomains resolve to the project", () =>
 {
-    var s = S("aquarum.ua");
-    s.Projects["aquarum.ua"].Aliases.Add("aqua-room.com.ua");
-    Eq("aquarum.ua", C("chrome", "aqua-room.com.ua / Редиректи - Google Docs - Google Chrome", s).Project);
-    Eq("aquarum.ua", C("chrome", "test.aquarum.ua - Адмінка - Google Chrome", s).Project);
+    var s = S("new-brand.ua");
+    s.Projects["new-brand.ua"].Aliases.Add("old-brand.com.ua");
+    Eq("new-brand.ua", C("chrome", "old-brand.com.ua / Редиректи - Google Docs - Google Chrome", s).Project);
+    Eq("new-brand.ua", C("chrome", "test.new-brand.ua - Адмінка - Google Chrome", s).Project);
 });
 Test("rules: title rule wins, app rule loses to a domain in the title", () =>
 {
-    var s = S("shop.com.ua", "ti.ua");
-    s.Rules.Add(new Rule { Match = "Looker Studio", Project = "ti.ua" });
+    var s = S("shop.com.ua", "beta.ua");
+    s.Rules.Add(new Rule { Match = "Looker Studio", Project = "beta.ua" });
     s.Rules.Add(new Rule { Match = "figma", Project = "shop.com.ua" });
-    Eq("ti.ua", C("chrome", "Звіт — Looker Studio - Google Chrome", s).Project);
+    Eq("beta.ua", C("chrome", "Звіт — Looker Studio - Google Chrome", s).Project);
     Eq("shop.com.ua", C("figma", "Головна — макет", s).Project);
-    Eq("ti.ua", C("figma", "ti.ua — банер", s).Project);
+    Eq("beta.ua", C("figma", "beta.ua — банер", s).Project);
 });
 Test("Planfix pages without a client are flagged for context", () =>
 {
@@ -113,18 +113,18 @@ Test("ignore by program or title fragment", () =>
     var s = S(); s.Ignore.Add("telegram"); s.Ignore.Add("YouTube");
     True(Classifier.IsIgnored(new WindowInfo("telegram", "Чати"), s), "app");
     True(Classifier.IsIgnored(new WindowInfo("chrome", "Музика - YouTube - Google Chrome"), s), "title");
-    True(!Classifier.IsIgnored(new WindowInfo("chrome", "ti.ua - Google Chrome"), s), "not ignored");
+    True(!Classifier.IsIgnored(new WindowInfo("chrome", "beta.ua - Google Chrome"), s), "not ignored");
 });
 
 Test("Screaming Frog crawl title: dashed URL names the client", () =>
 {
-    var c = C("javaw", "https-caffitalia-com-ua- - Screaming Frog SEO Spider 20.2 (Licensed)", S());
-    Eq("caffitalia.com.ua", c.Project); True(c.AutoProject && c.AutoAfterMinute, "auto after a minute");
+    var c = C("javaw", "https-coffee-shop-com-ua- - Screaming Frog SEO Spider 20.2 (Licensed)", S());
+    Eq("coffee-shop.com.ua", c.Project); True(c.AutoProject && c.AutoAfterMinute, "auto after a minute");
     Eq("Screaming Frog", c.App); Eq("Screaming Frog SEO Spider 20.2 (Licensed)", c.Label);
     // a dash inside the name, and a known project with its exact spelling
-    Eq("aqua-room.com.ua", C("javaw", "https-www-aqua-room-com-ua- - Screaming Frog SEO Spider", S()).Project);
+    Eq("old-brand.com.ua", C("javaw", "https-www-old-brand-com-ua- - Screaming Frog SEO Spider", S()).Project);
     Eq("shop.com.ua", C("javaw", "https-test-shop-com-ua- - Screaming Frog SEO Spider", S("shop.com.ua")).Project);
-    Eq("covere2.eu", C("javaw", "https-covere2-eu-de- - Screaming Frog SEO Spider", S()).Project);
+    Eq("gamma2.eu", C("javaw", "https-gamma2-eu-de- - Screaming Frog SEO Spider", S()).Project);
 });
 Test("URL written in a title names the client", () =>
 {
@@ -224,13 +224,13 @@ Test("tracker: switching windows makes segments; doc names a new project", () =>
 Test("tracker: a URL in a title becomes a project only after a minute", () =>
 {
     var (st, tr, _, run, _) = Setup();
-    var sf = new WindowInfo("javaw", "https-caffitalia-com-ua- - Screaming Frog SEO Spider 20.2 (Licensed)");
+    var sf = new WindowInfo("javaw", "https-coffee-shop-com-ua- - Screaming Frog SEO Spider 20.2 (Licensed)");
     run(0.5, sf, false, false);
     run(0.5, TG, false, false);
-    True(!st.Settings.Projects.ContainsKey("caffitalia.com.ua"), "30 s is not enough");
+    True(!st.Settings.Projects.ContainsKey("coffee-shop.com.ua"), "30 s is not enough");
     run(2, sf, false, false);
     run(0.5, TG, false, false);
-    True(st.Settings.Projects.ContainsKey("caffitalia.com.ua"), "2 min creates it");
+    True(st.Settings.Projects.ContainsKey("coffee-shop.com.ua"), "2 min creates it");
 });
 Test("tracker: idle keeps the minutes before the threshold, prompts after", () =>
 {
@@ -319,10 +319,10 @@ Test("file store round-trips settings and days with Cyrillic", () =>
 {
     var dir = Path.Combine(Path.GetTempPath(), "bt-test-" + Guid.NewGuid().ToString("N"));
     var fs = new FileStore(dir);
-    var s = fs.LoadSettings(); s.Projects["ti.ua"] = new ProjectCfg(); fs.SaveSettings(s);
+    var s = fs.LoadSettings(); s.Projects["beta.ua"] = new ProjectCfg(); fs.SaveSettings(s);
     var d = fs.LoadDay("2026-10-12"); d.Segments.Add(new Segment { S = 1, E = 2, Proc = "chrome", Title = "ТЗ №5" }); fs.SaveDay("2026-10-12", d);
     var fs2 = new FileStore(dir);
-    True(fs2.LoadSettings().Projects.ContainsKey("ti.ua"), "settings");
+    True(fs2.LoadSettings().Projects.ContainsKey("beta.ua"), "settings");
     Eq("ТЗ №5", fs2.LoadDay("2026-10-12").Segments[0].Title);
     True(File.ReadAllText(Path.Combine(dir, "days", "2026-10-12.json")).Contains("ТЗ №5"), "readable json");
     Directory.Delete(dir, true);

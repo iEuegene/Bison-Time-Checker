@@ -86,7 +86,7 @@ public static class Classifier
         return !FileExt.Contains(s[(s.LastIndexOf('.') + 1)..]);
     }
 
-    /// <summary>"https://WWW.Ti.ua/path" → "ti.ua"; "" when not a domain.</summary>
+    /// <summary>"https://WWW.Beta.ua/path" → "beta.ua"; "" when not a domain.</summary>
     public static string NormalizeDomain(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return "";
@@ -131,7 +131,7 @@ public static class Classifier
 
     public sealed record DocParts(string First, string Doc, string Task);
 
-    /// <summary>"ti.ua / ТЗ №123 / Виправлення помилок" → (ti.ua, ТЗ №123, Виправлення помилок). Needs two segments.</summary>
+    /// <summary>"beta.ua / ТЗ №123 / Виправлення помилок" → (beta.ua, ТЗ №123, Виправлення помилок). Needs two segments.</summary>
     public static DocParts? ParseDocTitle(string? title)
     {
         if (string.IsNullOrWhiteSpace(title)) return null;
@@ -184,7 +184,7 @@ public static class Classifier
         return best is null ? null : (best.Value.Project, best.Value.Match);
     }
 
-    /// <summary>"paramedic.ua - SEO-комплекс / ТЗ" → "SEO-комплекс / ТЗ".</summary>
+    /// <summary>"alpha-med.ua - SEO-комплекс / ТЗ" → "SEO-комплекс / ТЗ".</summary>
     public static string CutDomain(string title, string match)
     {
         var i = title.ToLowerInvariant().IndexOf(match, StringComparison.Ordinal);
@@ -224,7 +224,7 @@ public static class Classifier
         "at", "ch", "fr", "it", "es", "nl", "be", "us", "ca",
     };
 
-    /// <summary>"caffitalia-com-ua" → "caffitalia.com.ua"; known projects win, then the first public suffix from the left.</summary>
+    /// <summary>"coffee-shop-com-ua" → "coffee-shop.com.ua"; known projects win, then the first public suffix from the left.</summary>
     public static string? UndashDomain(string slug, Dictionary<string, string> idx)
     {
         var sl = slug.Trim('-').ToLowerInvariant();
@@ -293,7 +293,7 @@ public static class Classifier
             return new Cls(g, named.Value.Project, Key(g, label), label, "", w.Proc, app, browser);
         }
 
-        // 4. A title that starts with a domain and a separator names a client: "covere2.eu - SEO-комплекс".
+        // 4. A title that starts with a domain and a separator names a client: "gamma2.eu - SEO-комплекс".
         var lead = LeadingDomain.Match(shown);
         if (lead.Success)
         {
@@ -309,7 +309,7 @@ public static class Classifier
         }
 
         // 4b. A URL in the title — written normally ("https://site.com/") or the way Screaming Frog
-        //     names a crawl ("https-caffitalia-com-ua-"). A new client is added after a minute of work.
+        //     names a crawl ("https-coffee-shop-com-ua-"). A new client is added after a minute of work.
         var fromUrl = DomainFromUrl(clean, idx);
         if (fromUrl != null)
         {
