@@ -121,8 +121,9 @@ function ruleFor(url, host, settings) {
   for (const r of settings.rules || []) {
     const m = (r.match || '').trim().toLowerCase();
     if (!m) continue;
-    const hit = isDomainLike(m) && !m.includes('/') ? hostIs(host, m) : url.toLowerCase().includes(m);
-    if (hit) return r;
+    const whole = isDomainLike(m) && !m.includes('/');
+    const hit = whole ? hostIs(host, m) : url.toLowerCase().includes(m);
+    if (hit) return { ...r, whole };
   }
   return null;
 }
@@ -170,15 +171,17 @@ export function classify(tab, settings, docTitles = {}, idx = projectIndex(setti
   if (own && (!ruleProject || ruleProject === own)) {
     return { ...base, group: 'site', project: own, rowKey: `site:${own}`, label: host };
   }
-  if (ruleProject) {
-    return { ...base, group: 'linked', project: ruleProject, rowKey: `link:${domain}`, label: domain };
-  }
+  const linked = () => ({ ...base, group: 'linked', project: ruleProject, rowKey: `link:${domain}`, label: domain });
+  // A URL-part rule is precise: it wins. A whole-domain rule (planfix.com -> Inweb) must not
+  // swallow pages that name a client in their title, so the title goes first.
+  if (ruleProject && !rule.whole) return linked();
   // A project domain in the page title (task trackers, CRMs, search for the client) = work on it.
   const named = projectInTitle(tab.title, idx);
   if (named) {
     const label = cleanTitle(tab.title, named.match) || domain;
     return { ...base, group: 'linked', project: named.project, rowKey: `title:${domain}|${label}`, label, task: domain };
   }
+  if (ruleProject) return linked();
   return { ...base, group: 'other', project: null, rowKey: `dom:${domain}`, label: domain };
 }
 

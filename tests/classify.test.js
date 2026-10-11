@@ -122,3 +122,12 @@ test('project domain in a page title assigns the page (task tracker, CRM)', () =
   // a doc without the convention but with the domain in its name
   assert.equal(classify({ url: 'https://docs.google.com/document/d/abcdefghijk9/edit', title: 'Нотатки по paramedic.ua - Google Docs' }, s).project, 'paramedic.ua');
 });
+
+test('whole-domain rule does not swallow pages that name a client in the title', () => {
+  const s = { ...settings, projects: { ...settings.projects, 'paramedic.ua': { aliases: [] } },
+    rules: [{ match: 'planfix.com', project: 'Inweb' }] };
+  assert.equal(classify({ url: 'https://inweb.planfix.com/planner', title: 'Bison / Планувальник / inweb' }, s).project, 'Inweb');
+  assert.equal(classify({ url: 'https://inweb.planfix.com/task/57', title: 'paramedic.ua - SEO-комплекс / ТЗ №57' }, s).project, 'paramedic.ua');
+  const urlRule = { ...s, rules: [{ match: 'planfix.com/task/57', project: 'Inweb' }] };
+  assert.equal(classify({ url: 'https://inweb.planfix.com/task/57', title: 'paramedic.ua - ТЗ' }, urlRule).project, 'Inweb');
+});
