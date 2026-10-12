@@ -15,4 +15,7 @@ internal sealed class MemStore : IStore
     public Runtime LoadRuntime() => Rt;
     public void SaveRuntime(Runtime r) => Rt = r;
     public void Log(LogEntry e) => Logs.Add(e);
+    public Dictionary<string, DayStats> Stats = new();
+    public Dictionary<string, DayStats> LoadStats() => Stats;
+    public void SaveStats(Dictionary<string, DayStats> s) => Stats = s;
 }

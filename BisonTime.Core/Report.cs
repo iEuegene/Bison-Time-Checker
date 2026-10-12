@@ -76,6 +76,10 @@ public sealed class OtherApp
 public sealed class DayReport
 {
     public List<OtherApp> OtherApps { get; init; } = new();
+    /// <summary>All recorded time per program, projects and Інше together.</summary>
+    public Dictionary<string, long> AppMs { get; init; } = new();
+    /// <summary>Browser time per web service (Google Docs, Planfix, YouTube…).</summary>
+    public Dictionary<string, long> BrowserMs { get; init; } = new();
     public List<ProjectReport> Projects { get; init; } = new();
     public List<TimelineItem> Timeline { get; init; } = new();
     public long OtherMs { get; init; }
@@ -186,11 +190,17 @@ public static class Report
             .ToList();
         InferFromContext(items);
 
+        var appMs = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var browserMs = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        static void Add(Dictionary<string, long> d, string k, long v) => d[k] = (d.TryGetValue(k, out var x) ? x : 0) + v;
+
         foreach (var it in items)
         {
             var seg = it.Seg;
             var c = it.C;
             var ms = seg.E - seg.S;
+            Add(appMs, c.App, ms);
+            if (c.Browser) Add(browserMs, Classifier.Service(seg.Title, c, settings), ms);
             var last = timeline.Count > 0 ? timeline[^1] : null;
             if (c.Project != null)
             {
@@ -270,6 +280,8 @@ public static class Report
         return new DayReport
         {
             OtherApps = otherApps,
+            AppMs = appMs,
+            BrowserMs = browserMs,
             Projects = result,
             Timeline = timeline,
             OtherMs = timeline.Where(t => !t.IsSession && t.Moved == null).Sum(t => t.Ms),

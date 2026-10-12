@@ -16,10 +16,12 @@ public partial class App : Application
     public static App Instance => (App)Current;
 
     WinForms.NotifyIcon _tray = null!;
-    WinForms.ToolStripMenuItem _pauseItem = null!;
-    System.Drawing.Icon _iconNormal = null!, _iconPaused = null!;
+    WinForms.ToolStripMenuItem _pauseItem = null!, _finishItem = null!;
+    System.Drawing.Icon _iconNormal = null!, _iconPaused = null!, _iconDone = null!;
     MainWindow? _main;
     SettingsWindow? _settings;
+    DashboardWindow? _dashboard;
+    long _lastStats;
     readonly WindowWatcher _watcher = new();
     DispatcherTimer _timer = null!;
     HwndSource? _hotkeyWindow;
@@ -54,6 +56,7 @@ public partial class App : Application
         Store = new FileStore(dir);
         if (firstRun) Store.SaveSettings(Store.LoadSettings());
         Tracker = new Tracker(Store);
+        SaveStats(all: true);   // before raw segments older than 7 days are dropped
         Tracker.Cleanup();
         Autostart.Apply(Store.LoadSettings().Autostart);
 
@@ -86,9 +89,15 @@ public partial class App : Application
         UpdateTray();
 
         var now = Environment.TickCount64;
+        if (now - _lastStats > 10 * 60_000L)
+        {
+            _lastStats = now;
+            SaveStats(all: false);
+        }
         if (now - _lastCleanup > 6 * 3600_000L)
         {
             _lastCleanup = now;
+            SaveStats(all: true);
             Tracker.Cleanup();
             _watcher.ResetCache();
         }
@@ -96,6 +105,29 @@ public partial class App : Application
         {
             _lastUpdateCheck = now;
             _ = DailyUpdateCheck();
+        }
+    }
+
+    /// <summary>Dashboard numbers for today (and yesterday, for the day switch) or every day that still has segments.</summary>
+    void SaveStats(bool all)
+    {
+        try
+        {
+            var settings = Store.LoadSettings();
+            var today = TimeUtil.DayKey(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            var days = all
+                ? Store.Days().Where(d => Store.LoadDay(d).Segments.Count > 0).Append(today).Distinct()
+                : new[] { TimeUtil.ShiftDay(today, -1), today };
+            foreach (var d in days)
+            {
+                var f = Store.LoadDay(d);
+                if (f.Segments.Count == 0 && d != today) continue;
+                Stats.Save(Store, d, Report.Build(Tracker.DaySegments(d), f.State, settings));
+            }
+        }
+        catch (Exception ex)
+        {
+            Store.Log(new LogEntry { T = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Ev = "stats", Why = ex.Message });
         }
     }
 
@@ -152,10 +184,15 @@ public partial class App : Application
     {
         _iconNormal = LoadIcon("bt.ico");
         _iconPaused = LoadIcon("bt-paused.ico");
+        _iconDone = LoadIcon("bt-done.ico");
         var menu = new WinForms.ContextMenuStrip();
         menu.Items.Add("Відкрити", null, (_, _) => ShowMain());
         _pauseItem = new WinForms.ToolStripMenuItem("Пауза", null, (_, _) => TogglePause()) { ShortcutKeyDisplayString = "Alt+Shift+P" };
         menu.Items.Add(_pauseItem);
+        _finishItem = new WinForms.ToolStripMenuItem("Завершити роботу", null, (_, _) => { if (Tracker.Done) Resume(); else { FinishDay(); ShowMain(); } });
+        menu.Items.Add(_finishItem);
+        menu.Items.Add(new WinForms.ToolStripSeparator());
+        menu.Items.Add("Дашборд", null, (_, _) => ShowDashboard());
         menu.Items.Add("Налаштування", null, (_, _) => ShowSettings());
         menu.Items.Add("Довідка", null, (_, _) => ShowSettings(5));
         menu.Items.Add(new WinForms.ToolStripSeparator());
@@ -168,7 +205,9 @@ public partial class App : Application
     void UpdateTray()
     {
         string text;
-        if (Tracker.PausedSince is { } p)
+        if (Tracker.DoneUntil is { } until)
+            text = $"BT · день завершено, облік з {TimeUtil.Clock(until)}";
+        else if (Tracker.PausedSince is { } p)
         {
             var min = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - p) / 60_000;
             text = $"BT на паузі {min} хв · Alt+Shift+P";
@@ -179,17 +218,36 @@ public partial class App : Application
             text = project != null ? $"BT · {project}" : "BT · Інше";
         }
         if (text.Length > 63) text = text[..63];
-        var state = (Tracker.Paused ? "p" : "r") + text;
+        var state = (Tracker.Done ? "d" : Tracker.Paused ? "p" : "r") + text;
         if (state == _trayState) return;
         _trayState = state;
-        _tray.Icon = Tracker.Paused ? _iconPaused : _iconNormal;
+        _tray.Icon = Tracker.Done ? _iconDone : Tracker.Paused ? _iconPaused : _iconNormal;
         _tray.Text = text;
         _pauseItem.Text = Tracker.Paused ? "Продовжити облік" : "Пауза";
+        _pauseItem.Enabled = !Tracker.Done;
+        _finishItem.Text = Tracker.Done ? "Продовжити облік" : "Завершити роботу";
     }
 
     public void TogglePause()
     {
+        if (Tracker.Done) return;  // a finished day is resumed explicitly, not by the pause hotkey
         if (Tracker.Paused) Tracker.Resume(); else Tracker.Pause();
+        Sample();
+        _main?.Refresh();
+    }
+
+    /// <summary>"Завершити роботу": no counting until 05:00, the day's numbers saved for the dashboard.</summary>
+    public void FinishDay()
+    {
+        Tracker.FinishDay();
+        SaveStats(all: false);
+        Sample();
+        _main?.Refresh();
+    }
+
+    public void Resume()
+    {
+        Tracker.Resume();
         Sample();
         _main?.Refresh();
     }
@@ -238,12 +296,32 @@ public partial class App : Application
         _settings.Activate();
     }
 
+    public void ShowDashboard()
+    {
+        if (_dashboard == null)
+        {
+            _dashboard = new DashboardWindow();
+            _dashboard.Closed += (_, _) => _dashboard = null;
+        }
+        _dashboard.Show();
+        if (_dashboard.WindowState == WindowState.Minimized) _dashboard.WindowState = WindowState.Normal;
+        _dashboard.Activate();
+    }
+
+    /// <summary>Open the flyout on a given day, for corrections from the dashboard.</summary>
+    public void ShowDay(string day)
+    {
+        _main ??= new MainWindow();
+        _main.ShowNearTray(day);
+    }
+
     public static void OpenFolder(string dir) =>
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{dir}\"") { UseShellExecute = true });
 
     protected override void OnExit(ExitEventArgs e)
     {
         try { Tracker?.Shutdown(); } catch { /* best effort */ }
+        if (Tracker != null) SaveStats(all: false);
         if (_hotkeyWindow != null) { Native.UnregisterHotKey(_hotkeyWindow.Handle, HotkeyId); _hotkeyWindow.Dispose(); }
         if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
         // Release before the process ends so an updated copy waiting on it starts at once.

@@ -63,6 +63,7 @@ internal sealed class MainWindow : Window
         _total.HorizontalAlignment = HorizontalAlignment.Right;
         var totalBox = Col(0, _total, T("до звіту", 11, "MutedBrush"));
         ((TextBlock)totalBox.Children[1]).HorizontalAlignment = HorizontalAlignment.Right;
+        var dash = Btn(Glyph("\uE9D2", 15), "Quiet", () => { Hide(); App.Instance.ShowDashboard(); }, "Дашборд: день, тиждень, місяць");
         var gear = Btn(Glyph("", 15), "Quiet", () => App.Instance.ShowSettings(), "Налаштування");
         var header = new Border
         {
@@ -70,7 +71,7 @@ internal sealed class MainWindow : Window
             BorderBrush = B("LineBrush"),
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(14, 10, 8, 10),
-            Child = Cols("Auto,Auto,*,Auto", logo, HRow(_prev, _dayLabel, _next).M(8, 0, 0, 0), totalBox.M(0, 0, 4, 0), gear),
+            Child = Cols("Auto,Auto,*,Auto,Auto", logo, HRow(_prev, _dayLabel, _next).M(8, 0, 0, 0), totalBox.M(0, 0, 4, 0), dash, gear),
         };
         // the header doubles as a drag handle
         header.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 1) try { DragMove(); } catch { /* not pressed */ } };
@@ -99,9 +100,12 @@ internal sealed class MainWindow : Window
 
     bool EditingText => System.Windows.Input.Keyboard.FocusedElement is TextBox;
 
-    public void ShowNearTray()
+    public void ShowNearTray(string? day = null)
     {
-        _day = Today;
+        _day = day != null && string.CompareOrdinal(day, Today) <= 0 ? day : Today;
+        _open.Clear();
+        _openApps.Clear();
+        _openVisit = null;
         var area = SystemParameters.WorkArea;
         Height = Math.Min(680, area.Height - 24);
         Left = area.Right - Width - 12;
@@ -139,6 +143,9 @@ internal sealed class MainWindow : Window
         if (_day == Today && App.Tracker.Open is { } o)
             _current = Classifier.Classify(new WindowInfo(o.Proc, o.Title), _settings).Project;
         _off = App.Tracker.DayOff(_day);
+        // Keep the dashboard in step with every edit made here.
+        if (_file.Segments.Count > 0 || _day == Today)
+            try { Stats.Save(App.Store, _day, _report); } catch { /* stats are a convenience */ }
     }
 
     public void Refresh()
@@ -204,6 +211,14 @@ internal sealed class MainWindow : Window
     UIElement? PauseBar()
     {
         if (_day != Today) return null;
+        if (App.Tracker.DoneUntil is { } until)
+        {
+            var text = Col(2,
+                T("Робочий день завершено", 14, weight: FontWeights.Bold, display: true),
+                T($"облік продовжиться сам о {TimeUtil.Clock(until)}{(TimeUtil.DayKey(until) != Today ? " завтра" : "")}", 12, "MutedBrush"));
+            var btn = Btn("▶  Продовжити", "Ghost", () => App.Instance.Resume(), "Повернутися до обліку зараз");
+            return Card(Cols("*,Auto", text, btn), "SideBrush", "LineBrush", 12);
+        }
         if (App.Tracker.PausedSince is { } since)
         {
             var min = (Now - since) / TimeUtil.Min;
@@ -215,9 +230,12 @@ internal sealed class MainWindow : Window
         }
         var dot = new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Fill = B("LimeBrush"), VerticalAlignment = VerticalAlignment.Center };
         var label = T(_current != null ? $"Облік іде · {_current}" : "Облік іде", 13, "MutedBrush");
+        label.TextTrimming = TextTrimming.CharacterEllipsis;
         var pause = Btn("❚❚  Пауза", "Ghost", () => App.Instance.TogglePause(), "Пауза (Alt+Shift+P)");
-        pause.Padding = new Thickness(14, 8, 14, 8);
-        return Card(Cols("Auto,*,Auto", dot, label.M(10, 0, 8, 0), pause), "SideBrush", "LineBrush", 8);
+        pause.Padding = new Thickness(12, 8, 12, 8);
+        var finish = Btn("Завершити роботу", "Quiet", () => App.Instance.FinishDay(),
+            "Зупинити облік до завтрашнього ранку (05:00) — не треба пам'ятати зняти паузу");
+        return Card(Cols("Auto,*,Auto,Auto", dot, label.M(10, 0, 8, 0), pause, finish.M(4, 0, 0, 0)), "SideBrush", "LineBrush", 8);
     }
 
     UIElement? UpdateBar()

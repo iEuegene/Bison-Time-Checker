@@ -11,6 +11,8 @@ public interface IStore
     Runtime LoadRuntime();
     void SaveRuntime(Runtime r);
     void Log(LogEntry e);
+    Dictionary<string, DayStats> LoadStats();
+    void SaveStats(Dictionary<string, DayStats> stats);
 }
 
 /// <summary>Why nothing is being counted, as shown under "Поза обліком".</summary>
@@ -19,7 +21,7 @@ public static class OffReasons
     public static readonly Dictionary<string, string> Names = new()
     {
         ["focus"] = "BT не бачить вікна", ["idle"] = "простій", ["lock"] = "екран заблоковано",
-        ["pause"] = "пауза", ["untracked"] = "ігнор",
+        ["pause"] = "пауза", ["untracked"] = "ігнор", ["done"] = "день завершено",
     };
 }
 
@@ -52,6 +54,8 @@ public sealed class Tracker
     }
 
     public bool Paused => _rt.PausedSince != null;
+    public bool Done => _rt.DoneUntil != null;
+    public long? DoneUntil => _rt.DoneUntil;
     public long? PausedSince => _rt.PausedSince;
     public OpenSeg? Open => _rt.Open;
 
@@ -108,8 +112,8 @@ public sealed class Tracker
     {
         if (_rt.Off is not { } off) return;
         _rt.Off = null;
-        // Overnight and anything under a minute is noise, not information.
-        if (t - off.S >= MinOff && TimeUtil.DayKey(off.S) == TimeUtil.DayKey(t))
+        // Overnight, after "Завершити роботу" and anything under a minute is noise, not information.
+        if (off.Reason != "done" && t - off.S >= MinOff && TimeUtil.DayKey(off.S) == TimeUtil.DayKey(t))
         {
             var day = TimeUtil.DayKey(off.S);
             var f = _store.LoadDay(day);
@@ -153,10 +157,20 @@ public sealed class Tracker
         }
         _rt.LastTick = t;
 
+        if (_rt.DoneUntil is { } until && t >= until)
+        {
+            _rt.DoneUntil = null;
+            EndOff(t);
+            Log("day-start");
+            Save(force: true);
+            Changed?.Invoke();
+        }
+
         if (_rt.Idle != null && (locked || !idle)) FinishIdle(t, offer: !locked);
 
         var settings = _store.LoadSettings();
         string? reason =
+            _rt.DoneUntil != null ? "done" :
             _rt.PausedSince != null ? "pause" :
             locked ? "lock" :
             idle ? "idle" :
@@ -204,10 +218,36 @@ public sealed class Tracker
         Changed?.Invoke();
     }
 
+    /// <summary>The next 05:00 local after <paramref name="t"/>: when a finished day starts counting again.</summary>
+    public static long NextMorning(long t)
+    {
+        var local = TimeUtil.Local(t);
+        var m = local.Date.AddHours(5);
+        if (m <= local) m = m.AddDays(1);
+        return TimeUtil.ToMs(m);
+    }
+
+    /// <summary>"Завершити роботу": stop counting until tomorrow morning; no "remember to unpause".</summary>
+    public void FinishDay()
+    {
+        var t = _now();
+        _rt.PausedSince = null;
+        _rt.DoneUntil = NextMorning(t);
+        if (_rt.Open is { } o) { Close(o, t, "done"); _rt.Open = null; }
+        FinishIdle(t, offer: true);
+        EndOff(t);
+        StartOff("done", t);
+        Log("done");
+        Save(force: true);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Continue counting after a pause or a finished day.</summary>
     public void Resume()
     {
-        if (_rt.PausedSince == null) return;
+        if (_rt.PausedSince == null && _rt.DoneUntil == null) return;
         _rt.PausedSince = null;
+        _rt.DoneUntil = null;
         EndOff(_now());
         Log("resume");
         Save(force: true);

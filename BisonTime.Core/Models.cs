@@ -89,10 +89,26 @@ public sealed class DayFile
 }
 
 /// <summary>Tracker state that must survive a crash or reboot.</summary>
+/// <summary>
+/// A day boiled down for the dashboard: minutes per project, program and browser service.
+/// No window titles, so it is kept for a year while raw segments go after 7 days.
+/// </summary>
+public sealed class DayStats
+{
+    public long ProjectMs { get; set; }
+    public long OtherMs { get; set; }
+    public Dictionary<string, long> Projects { get; set; } = new();
+    public Dictionary<string, long> Apps { get; set; } = new();
+    public Dictionary<string, long> Browser { get; set; } = new();
+    [System.Text.Json.Serialization.JsonIgnore] public long TrackedMs => ProjectMs + OtherMs;
+}
+
 public sealed class Runtime
 {
     public OpenSeg? Open { get; set; }
     public long? PausedSince { get; set; }
+    /// <summary>"Завершити роботу": nothing is counted until this moment (next morning, 05:00).</summary>
+    public long? DoneUntil { get; set; }
     public OffState? Off { get; set; }
     public IdlePending? Idle { get; set; }
     public long LastTick { get; set; }

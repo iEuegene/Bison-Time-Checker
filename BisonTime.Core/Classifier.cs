@@ -33,7 +33,8 @@ public static class Classifier
         ["outlook"] = "Outlook", ["olk"] = "Outlook", ["telegram"] = "Telegram", ["explorer"] = "Провідник",
         ["code"] = "VS Code", ["claude"] = "Claude", ["slack"] = "Slack", ["zoom"] = "Zoom", ["ms-teams"] = "Teams",
         ["teams"] = "Teams", ["figma"] = "Figma", ["notepad"] = "Блокнот", ["viber"] = "Viber",
-        ["screamingfrogseospider"] = "Screaming Frog", ["acrord32"] = "Acrobat", ["acrobat"] = "Acrobat",
+        ["screamingfrogseospider"] = "Screaming Frog", ["sharex"] = "ShareX", ["photoshop"] = "Photoshop",
+        ["whatsapp"] = "WhatsApp", ["discord"] = "Discord", ["obsidian"] = "Obsidian", ["notion"] = "Notion", ["acrord32"] = "Acrobat", ["acrobat"] = "Acrobat",
     };
 
     static readonly Regex BrowserSuffix = new(
@@ -60,6 +61,50 @@ public static class Classifier
     };
 
     public static bool IsBrowser(string proc) => Browsers.Contains(proc);
+
+    /// <summary>Web services recognisable by the tab title, first match wins. The browser shows no URL to BT.</summary>
+    static readonly (string Name, Regex Re)[] Services = new (string, string)[]
+    {
+        ("Google Meet", @"(?:^|\s)Meet\s+[-–—]|Google Meet"),
+        ("Google Docs", @"[-–—]\s+Google\s+(?:Docs|Документи|Документы)$"),
+        ("Google Sheets", @"[-–—]\s+Google\s+(?:Sheets|Таблиці|Таблицы)$"),
+        ("Google Slides", @"[-–—]\s+Google\s+(?:Slides|Презентації|Презентации)$"),
+        ("Google Drive", @"Google\s+(?:Drive|Диск)"),
+        ("Gmail", @"\bGmail\b"),
+        ("Google Calendar", @"Google\s+(?:Calendar|Календар|Календарь)"),
+        ("Search Console", @"Search Console"),
+        ("Google Analytics", @"\bAnalytics\b"),
+        ("Looker Studio", @"Looker Studio|Data Studio"),
+        ("Google Ads", @"Google Ads"),
+        ("Planfix", @"Planfix|ПланФ[іи]кс"),
+        ("YouTube", @"YouTube"),
+        ("Telegram", @"^Telegram\b|Telegram Web"),
+        ("WhatsApp", @"WhatsApp"),
+        ("Claude", @"\bClaude\b"),
+        ("ChatGPT", @"ChatGPT"),
+        ("Gemini", @"\bGemini\b"),
+        ("LinkedIn", @"LinkedIn"),
+        ("Facebook", @"Facebook"),
+        ("Instagram", @"Instagram"),
+        ("Ahrefs", @"Ahrefs"),
+        ("Serpstat", @"Serpstat"),
+        ("Semrush", @"Semrush"),
+        ("GitHub", @"GitHub"),
+        ("Пошук Google", @"[-–—]\s+(?:Пошук Google|Google Search|Поиск в Google)$"),
+    }.Select(x => (x.Item1, new Regex(x.Item2, RegexOptions.IgnoreCase | RegexOptions.Compiled))).ToArray();
+
+    public const string ProjectSites = "Сайти й задачі проєктів";
+    public const string OtherTabs = "Інші вкладки";
+
+    /// <summary>Browser tab → service for the dashboard: Google Docs, Planfix, YouTube… or a fallback bucket.</summary>
+    public static string Service(string title, Cls c, Settings s)
+    {
+        var t = Clean(title, browser: true);
+        foreach (var (name, re) in Services)
+            if (re.IsMatch(t)) return name;
+        if (s.WorkTools.Any(w => w != "" && t.Contains(w, StringComparison.OrdinalIgnoreCase))) return "Planfix";
+        return c.Project != null ? ProjectSites : OtherTabs;
+    }
 
     public static string AppName(string proc) =>
         AppNames.TryGetValue(proc, out var n) ? n : (proc.Length > 0 ? char.ToUpper(proc[0]) + proc[1..] : "Програма");

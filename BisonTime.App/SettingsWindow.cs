@@ -267,7 +267,7 @@ internal sealed class SettingsWindow : Window
 
     void DataPage()
     {
-        H1("Дані", "Усе лежить у папці BisonTime в AppData цього користувача: файл на день, налаштування, журнал. Сирі записи вікон зберігаються 7 днів, підсумки — 30.");
+        H1("Дані", "Усе лежить у папці BisonTime в AppData цього користувача: файл на день, налаштування, журнал. Сирі записи вікон зберігаються 7 днів, дні — 30, цифри для дашборда без назв вікон — рік.");
         var status = T("", 13, "LimeBrush", wrap: true);
         _page.Children.Add(HRow(
             Btn("Відкрити папку з даними", "Primary", () => App.OpenFolder(App.Store.Dir)),

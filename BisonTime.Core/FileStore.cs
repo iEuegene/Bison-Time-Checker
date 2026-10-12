@@ -130,6 +130,16 @@ public sealed class FileStore : IStore
         catch { /* diagnostics must never break tracking */ }
     }
 
+    Dictionary<string, DayStats>? _stats;
+
+    public Dictionary<string, DayStats> LoadStats() => _stats ??= Read<Dictionary<string, DayStats>>(P("stats.json"));
+
+    public void SaveStats(Dictionary<string, DayStats> stats)
+    {
+        _stats = stats;
+        Write(P("stats.json"), stats);
+    }
+
     public IReadOnlyList<LogEntry> RecentLog()
     {
         LoadLog();
@@ -141,6 +151,7 @@ public sealed class FileStore : IStore
     {
         foreach (var d in Days().ToList()) DeleteDay(d);
         _days.Clear();
+        SaveStats(new Dictionary<string, DayStats>());
         Write(P("runtime.json"), new Runtime());
         _log.Clear();
         try { File.Delete(P("log.txt")); } catch { /* best effort */ }

@@ -414,5 +414,72 @@ Test("updates: newest release tag when nothing is signed yet", () =>
     Eq(null, Updates.NewestVersion("<html>"), "not json");
 });
 
+// ---------------- finish day, dashboard ----------------
+Test("tracker: finish day stops counting until 05:00, then resumes by itself", () =>
+{
+    var (st, tr, clock, run, day) = Setup(new DateTime(2026, 10, 12, 4, 40, 0));
+    run(10, DOC, false, false);
+    tr.FinishDay();
+    True(tr.Done && !tr.Paused, "done, not paused");
+    Eq(ToMs(new DateTime(2026, 10, 12, 5, 0, 0)), tr.DoneUntil!.Value);
+    run(5, DOC, false, false);
+    True(tr.Done, "still done at 04:55");
+    Eq(1, st.DaysMap[day].Segments.Count);
+    run(10, DOC, false, false);          // crosses 05:00
+    True(!tr.Done, "resumed");
+    tr.Shutdown();
+    var segs = st.DaysMap[day].Segments;
+    Eq(2, segs.Count);
+    True(Math.Abs(segs[1].E - segs[1].S - 5 * Min) <= 2000, "counts again from 05:00");
+    True(st.DaysMap[day].Off.All(o => o.Reason != "done"), "a finished evening is not 'поза обліком'");
+    Eq(ToMs(new DateTime(2026, 10, 13, 5, 0, 0)), Tracker.NextMorning(ToMs(new DateTime(2026, 10, 12, 19, 30, 0))));
+});
+Test("tracker: resume right after finishing", () =>
+{
+    var (st, tr, _, run, day) = Setup();
+    run(2, DOC, false, false);
+    tr.FinishDay();
+    tr.Resume();
+    run(2, DOC, false, false);
+    tr.Shutdown();
+    True(!tr.Done, "resumed"); Eq(2, st.DaysMap[day].Segments.Count);
+});
+Test("browser tabs map to services", () =>
+{
+    var s = S("shop.com.ua");
+    string Sv(string title) => Classifier.Service(title, C("chrome", title, s), s);
+    Eq("Google Docs", Sv(DocT));
+    Eq("Google Sheets", Sv("Семантика - Google Таблиці - Google Chrome"));
+    Eq("Google Meet", Sv("Meet – abc-defg-hij - Google Chrome"));
+    Eq("Gmail", Sv("Вхідні (3) - me@example.com - Gmail - Google Chrome"));
+    Eq("Planfix", Sv("Bison / Планувальник / inweb - Google Chrome"));
+    Eq("YouTube", Sv("Як працює GEO - YouTube - Google Chrome"));
+    Eq("Пошук Google", Sv("купити каву - Пошук Google - Google Chrome"));
+    Eq(Classifier.ProjectSites, Sv("shop.com.ua - інтернет-магазин - Google Chrome"));
+    Eq(Classifier.OtherTabs, Sv("Новини дня - Google Chrome"));
+});
+Test("dashboard: per-day stats, periods and top lists", () =>
+{
+    var segs = new[] { Sg(0, 30, "chrome", DocT), Sg(30, 40, "telegram", "Чат"), Sg(40, 45, "chrome", "Новини - Google Chrome") };
+    var r = Report.Build(segs, new DayState(), S("shop.com.ua"));
+    var d = Stats.From(r);
+    Eq(30 * Min, d.ProjectMs); Eq(15 * Min, d.OtherMs); Eq(45 * Min, d.TrackedMs);
+    Eq(35 * Min, d.Apps["Chrome"]); Eq(10 * Min, d.Apps["Telegram"]);
+    Eq(30 * Min, d.Browser["Google Docs"]); Eq(5 * Min, d.Browser[Classifier.OtherTabs]);
+    var week = Stats.Days(Period.Week, "2026-10-14");
+    Eq("2026-10-12", week[0]); Eq("2026-10-18", week[^1]);
+    var month = Stats.Days(Period.Month, "2026-02-10");
+    Eq(28, month.Count);
+    Eq("2026-09-14", Stats.Shift(Period.Week, "2026-09-21", -1));
+    var sum = Stats.Sum(new[] { d, d });
+    Eq(90 * Min, sum.TrackedMs); Eq(20 * Min, sum.Apps["Telegram"]);
+    var top = Stats.Top(new Dictionary<string, long> { ["a"] = 50, ["b"] = 30, ["c"] = 15, ["d"] = 5 }, 3);
+    Eq(3, top.Count); Eq(Stats.Rest, top[2].Name); Eq(20L, top[2].Ms);
+    Eq(4, Stats.Top(new Dictionary<string, long> { ["a"] = 50, ["b"] = 30, ["c"] = 15, ["d"] = 5 }, 4).Count);
+    var store = new MemStore();
+    Stats.Save(store, DayKey(T0), r);
+    Eq(45 * Min, store.Stats[DayKey(T0)].TrackedMs);
+});
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;

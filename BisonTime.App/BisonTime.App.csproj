@@ -15,7 +15,7 @@
     <RootNamespace>BisonTime.App</RootNamespace>
     <Product>Bison Time Checker</Product>
     <Description>Bison Time Checker (BT) — облік часу по проєктах для щоденного звіту Inweb</Description>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <!-- Full version info: an exe without publisher metadata looks suspicious to antivirus heuristics. -->
     <Company>iEuegene</Company>
     <Authors>iEuegene</Authors>
@@ -42,6 +42,7 @@
     <Resource Include="Assets\*.png" />
     <EmbeddedResource Include="Assets\bt.ico" LogicalName="bt.ico" />
     <EmbeddedResource Include="Assets\bt-paused.ico" LogicalName="bt-paused.ico" />
+    <EmbeddedResource Include="Assets\bt-done.ico" LogicalName="bt-done.ico" />
   </ItemGroup>
 
 </Project>
