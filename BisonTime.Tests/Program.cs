@@ -169,6 +169,22 @@ Test("report: Інше chronological with sessions; moves count into the project
     var r2 = Report.Build(segs, st, S("shop.com.ua"));
     Eq(40, r2.Projects[0].Rounded); Eq(0L, r2.OtherMs);
 });
+Test("report: Інше grouped by program, biggest first, time order inside", () =>
+{
+    var segs = new[]
+    {
+        Sg(0, 5, "telegram", "Робочий чат"), Sg(5, 6, "chrome", "Новини - Google Chrome"),
+        Sg(6, 20, "chrome", DocT), Sg(20, 30, "telegram", "Інший чат"), Sg(30, 33, "sharex", "ShareX - Image Editor"),
+    };
+    var r = Report.Build(segs, new DayState(), S("shop.com.ua"));
+    Eq(3, r.OtherApps.Count);
+    var tg = r.OtherApps[0];
+    Eq(15 * Min, tg.Ms); Eq(2, tg.Visits.Count); True(tg.Visits[0].S < tg.Visits[1].S, "chronological");
+    Eq(r.OtherMs, r.OtherApps.Sum(a => a.Ms));
+    var st = new DayState(); st.Moved[tg.Visits[1].Key] = "shop.com.ua";
+    var moved = Report.Build(segs, st, S("shop.com.ua")).OtherApps;
+    Eq(5 * Min, moved.Single(a => a.Visits.Any(v => v.Moved != null)).Ms);
+});
 Test("report: Planfix page goes to the project around it, not further than 15 min", () =>
 {
     const string PF = "Bison / Планувальник / inweb - Google Chrome";

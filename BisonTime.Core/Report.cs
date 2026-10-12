@@ -62,8 +62,20 @@ public sealed class TimelineItem
     public string? Moved { get; set; }
 }
 
+/// <summary>"Інше" of one program: its uncounted visits in time order and how long they took.</summary>
+public sealed class OtherApp
+{
+    public string Name { get; init; } = "";
+    public bool Browser { get; init; }
+    public string Proc { get; init; } = "";
+    /// <summary>Visits not moved into a project.</summary>
+    public long Ms { get; init; }
+    public List<TimelineItem> Visits { get; init; } = new();
+}
+
 public sealed class DayReport
 {
+    public List<OtherApp> OtherApps { get; init; } = new();
     public List<ProjectReport> Projects { get; init; } = new();
     public List<TimelineItem> Timeline { get; init; } = new();
     public long OtherMs { get; init; }
@@ -243,8 +255,21 @@ public static class Report
         }
         result = result.OrderByDescending(p => p.ExactMs).ThenBy(p => p.Name, StringComparer.Ordinal).ToList();
 
+        var otherApps = timeline.Where(t => !t.IsSession)
+            .GroupBy(t => t.App == "" ? t.Proc : t.App, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new OtherApp
+            {
+                Name = g.First().App == "" ? g.First().Proc : g.First().App,
+                Browser = g.Any(t => t.Browser), Proc = g.First().Proc,
+                Ms = g.Where(t => t.Moved == null).Sum(t => t.Ms),
+                Visits = g.OrderBy(t => t.S).ToList(),
+            })
+            .OrderByDescending(a => a.Ms).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         return new DayReport
         {
+            OtherApps = otherApps,
             Projects = result,
             Timeline = timeline,
             OtherMs = timeline.Where(t => !t.IsSession && t.Moved == null).Sum(t => t.Ms),

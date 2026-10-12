@@ -14,6 +14,8 @@ internal sealed class MainWindow : Window
     string _day = TimeUtil.DayKey(Now);
     readonly HashSet<string> _open = new();
     bool _otherOpen, _showShort;
+    readonly HashSet<string> _openApps = new(StringComparer.OrdinalIgnoreCase);
+    string? _openVisit;
     readonly StackPanel _body = new() { Margin = new Thickness(10, 10, 10, 14) };
     readonly ScrollViewer _scroll;
     readonly TextBlock _dayLabel, _total;
@@ -121,6 +123,8 @@ internal sealed class MainWindow : Window
         if (string.CompareOrdinal(d, TimeUtil.ShiftDay(Today, -(Tracker.KeepSegmentsDays - 1))) < 0) return;
         _day = d;
         _open.Clear();
+        _openApps.Clear();
+        _openVisit = null;
         Refresh();
     }
 
@@ -363,68 +367,95 @@ internal sealed class MainWindow : Window
 
     UIElement? Other()
     {
-        if (!_report.Timeline.Any(t => !t.IsSession)) return null;
-        // Visits under a minute fold away; sessions they split are glued back together.
-        var visible = new List<TimelineItem>();
-        var hidden = 0;
-        foreach (var t in _report.Timeline)
-        {
-            if (!t.IsSession && t.Moved == null && t.Ms < TimeUtil.Min && !_showShort) { hidden++; continue; }
-            if (t.IsSession && visible.Count > 0 && visible[^1] is { IsSession: true } last && last.Project == t.Project)
-            {
-                visible[^1] = new TimelineItem { IsSession = true, Project = last.Project, S = last.S, E = Math.Max(last.E, t.E) };
-                continue;
-            }
-            visible.Add(t);
-        }
-
+        if (_report.OtherApps.Count == 0) return null;
         var head = Cols("*,Auto,22", T("Інше", 13, "FaintBrush"), T(TimeUtil.FormatExact(_report.OtherMs), 12, "FaintBrush"),
-            Glyph(_otherOpen ? "" : "", 11, "FaintBrush"));
+            Glyph(_otherOpen ? "\uE70E" : "\uE70D", 11, "FaintBrush"));
         var headBox = new Border { Background = Brushes.Transparent, Child = head };
         Clickable(headBox, () => { _otherOpen = !_otherOpen; Render(); });
         var panel = new StackPanel();
         panel.Children.Add(headBox);
         if (_otherOpen)
         {
-            foreach (var t in visible) panel.Children.Add(t.IsSession ? SessionRow(t) : VisitRow(t));
-            if (hidden > 0 || _showShort)
-                panel.Children.Add(Btn(_showShort ? "сховати короткі відвідування" : $"ще {hidden} коротких відвідувань (<1 хв)", "Quiet",
-                    () => { _showShort = !_showShort; Render(); }).M(0, 6, 0, 0));
+            panel.Children.Add(T("По програмах, найбільше часу зверху. У звіт не йде, поки не перенесеш у проєкт.", 11.5, "FaintBrush", wrap: true).M(0, 2, 0, 6));
+            foreach (var a in _report.OtherApps) panel.Children.Add(OtherAppEl(a));
         }
         return Card(panel, "BgBrush", "LineBrush", 10);
     }
 
-    static UIElement SessionRow(TimelineItem t)
+    UIElement OtherAppEl(OtherApp a)
     {
-        var name = HRow(Mark(12).M(0, 0, 7, 0), T(t.Project ?? "", 12, "LimeBrush", FontWeights.Medium), T("  · у проєкті", 11, "FaintBrush"));
-        var g = Cols("44,*,Auto", T(TimeUtil.Clock(t.S), 12, "FaintBrush"), name, T($"до {TimeUtil.Clock(t.E)}", 12, "FaintBrush"));
-        return new Border { BorderBrush = B("LineBrush"), BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 6), Child = g };
+        var open = _openApps.Contains(a.Name);
+        var count = a.Visits.Count;
+        var head = Cols("*,Auto,Auto,22",
+            T(a.Name, 13, a.Ms > 0 ? "TextBrush" : "MutedBrush", FontWeights.Medium),
+            T($"{count} {Plural(count, "запис", "записи", "записів")}", 11.5, "FaintBrush").M(8, 0, 10, 0),
+            T(TimeUtil.FormatExact(a.Ms), 12.5, a.Ms > 0 ? "LimeBrush" : "FaintBrush", FontWeights.SemiBold),
+            Glyph(open ? "\uE70E" : "\uE70D", 10, "FaintBrush"));
+        var headBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 7, 0, 7), Child = head };
+        Clickable(headBox, () => { if (!_openApps.Add(a.Name)) _openApps.Remove(a.Name); Render(); });
+
+        var box = new StackPanel();
+        box.Children.Add(headBox);
+        if (open)
+        {
+            var hidden = 0;
+            var list = new StackPanel { Margin = new Thickness(10, 0, 0, 6) };
+            foreach (var t in a.Visits)
+            {
+                if (t.Moved == null && t.Ms < TimeUtil.Min && !_showShort) { hidden++; continue; }
+                list.Children.Add(VisitRow(t));
+            }
+            var foot = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+            if (hidden > 0 || _showShort)
+                foot.Children.Add(Btn(_showShort ? "сховати короткі" : $"ще {hidden} коротких (<1 хв)", "Quiet", () => { _showShort = !_showShort; Render(); }));
+            if (!a.Browser)
+            {
+                var proc = a.Proc;
+                foot.Children.Add(Btn($"Ігнорувати {a.Name}", "Quiet",
+                    () => UpdateSettings(s => { if (!s.Ignore.Contains(proc)) s.Ignore.Add(proc); }), $"Ніколи не записувати {a.Name}"));
+            }
+            if (foot.Children.Count > 0) list.Children.Add(foot);
+            box.Children.Add(list);
+        }
+        return new Border { BorderBrush = B("LineBrush"), BorderThickness = new Thickness(0, 1, 0, 0), Child = box };
     }
 
+    static string Plural(int n, string one, string few, string many)
+    {
+        var d = n % 10;
+        var dd = n % 100;
+        return d == 1 && dd != 11 ? one : d is >= 2 and <= 4 && dd is < 12 or > 14 ? few : many;
+    }
+
+    /// <summary>One compact line; a click on it shows "→ Проєкт" and "Ігнорувати".</summary>
     UIElement VisitRow(TimelineItem t)
     {
-        var label = T(t.Label, 13, t.Moved != null ? "MutedBrush" : "TextBrush");
-        var top = Cols("44,*,Auto", T(TimeUtil.Clock(t.S), 12, "FaintBrush"), label, T(TimeUtil.FormatExact(t.Ms), 12, "MutedBrush"));
-        var acts = new WrapPanel { Margin = new Thickness(44, 4, 0, 0) };
-        if (t.Moved != null)
+        var label = T(t.Label, 12.5, t.Moved != null ? "MutedBrush" : "TextBrush");
+        label.TextTrimming = TextTrimming.CharacterEllipsis;
+        label.ToolTip = t.Label;
+        var dur = t.Moved != null ? T($"→ {t.Moved}", 12, "LimeBrush") : T(TimeUtil.FormatExact(t.Ms), 12, "MutedBrush");
+        var line = Cols("42,*,Auto", T(TimeUtil.Clock(t.S), 12, "FaintBrush"), label, dur.M(8, 0, 0, 0));
+        var lineBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 4, 0, 4), Child = line };
+        Clickable(lineBox, () => { _openVisit = _openVisit == t.Key ? null : t.Key; Render(); });
+
+        var col = new StackPanel();
+        col.Children.Add(lineBox);
+        if (_openVisit == t.Key)
         {
-            acts.Children.Add(T($"→ {t.Moved}", 12, "LimeBrush"));
-            acts.Children.Add(Btn("скасувати", "Quiet", () => UpdateDay(st => st.Moved.Remove(t.Key))));
+            var acts = new WrapPanel { Margin = new Thickness(42, 2, 0, 6) };
+            if (t.Moved != null)
+                acts.Children.Add(Btn("скасувати перенесення", "Quiet", () => UpdateDay(st => st.Moved.Remove(t.Key))));
+            else
+            {
+                acts.Children.Add(Picker("→ Проєкт", "Ghost", ProjectNames(), v => UpdateDay(st => st.Moved[t.Key] = v)));
+                if (t.Browser)
+                    acts.Children.Add(Btn("Ігнорувати сторінку", "Quiet",
+                        () => UpdateSettings(s => { if (!s.Ignore.Contains(t.Label)) s.Ignore.Add(t.Label); }),
+                        $"Ніколи не записувати вкладки з «{t.Label}» у заголовку").M(6, 0, 0, 0));
+            }
+            col.Children.Add(acts);
         }
-        else
-        {
-            acts.Children.Add(Picker("→ Проєкт", "Ghost", ProjectNames(), v => UpdateDay(st => st.Moved[t.Key] = v)));
-            var ignore = t.Browser ? t.Label : t.Proc;
-            var tip = t.Browser ? $"Ніколи не записувати вкладки з «{t.Label}» у заголовку" : $"Ніколи не записувати {t.App}";
-            acts.Children.Add(Btn(t.Browser ? "Ігнорувати сторінку" : $"Ігнорувати {t.App}", "Quiet",
-                () => UpdateSettings(s => { if (!s.Ignore.Contains(ignore)) s.Ignore.Add(ignore); }), tip).M(6, 0, 0, 0));
-        }
-        var sub = T(t.Browser ? t.App : t.App, 11.5, "FaintBrush").M(44, 1, 0, 0);
-        return new Border
-        {
-            BorderBrush = B("LineBrush"), BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 6),
-            Child = Col(0, top, sub, acts),
-        };
+        return col;
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
