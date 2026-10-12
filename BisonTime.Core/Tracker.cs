@@ -144,6 +144,7 @@ public sealed class Tracker
     public void Tick(WindowInfo? w, bool idle, bool locked)
     {
         var t = _now();
+        if (idle && w != null && Classifier.IsCall(w)) idle = false;
 
         // Asleep, BT closed or crashed: what was open ends where the last tick saw it.
         if (_rt.LastTick > 0 && t - _rt.LastTick > Gap)

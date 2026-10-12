@@ -145,10 +145,22 @@ Test("report: 30 min in a doc -> 0 год 30 хв + comment", () =>
     var p = r.Projects.Single();
     Eq(30, p.Rounded); Eq("ТЗ №123 — виправлення помилок", p.Comment.Text);
 });
-Test("report: every row counts at least a minute", () =>
+Test("report: a project counts at least a minute, rows count what they took", () =>
 {
     var r = Report.Build(new[] { Sg(0, 0.3, "chrome", DocT), Sg(1, 1.2, "excel", "shop.com.ua.xlsx - Excel") }, new DayState(), S("shop.com.ua"));
-    Eq(2 * Min, r.Projects.Single().ExactMs);
+    Eq(Min, r.Projects.Single().ExactMs);
+    // twenty 10-second task pages: ~3.3 min, not 20
+    var segs = Enumerable.Range(0, 20).Select(i => Sg(i, i + 1.0 / 6, "chrome", $"shop.com.ua — задача {i} - Planfix - Google Chrome")).ToArray();
+    var p = Report.Build(segs, new DayState(), S("shop.com.ua")).Projects.Single();
+    True(p.ExactMs >= 3 * Min && p.ExactMs < 4 * Min, $"got {p.ExactMs / 1000}s");
+});
+Test("report: a row keeps its pieces for the breakdown", () =>
+{
+    var segs = new[] { Sg(0, 10, "chrome", DocT), Sg(10.5, 20, "chrome", DocT), Sg(40, 45, "chrome", DocT) };
+    var row = Report.Build(segs, new DayState(), S("shop.com.ua")).Projects[0].Groups[0].Rows[0];
+    Eq(2, row.Pieces.Count);
+    Eq(T0 + 20 * Min, row.Pieces[0].E);
+    Eq(5 * Min, row.Pieces[1].Ms);
 });
 Test("report: disabled rows drop out; manual minutes count", () =>
 {
@@ -261,6 +273,17 @@ Test("tracker: idle keeps the minutes before the threshold, prompts after", () =
     Eq(1, f.State.Idle.Count);
     True(Math.Abs(f.State.Idle[0].E - f.State.Idle[0].S - 7 * Min) <= 2000, "idle 7 min");
     Eq("shop.com.ua", f.State.Idle[0].Project);
+});
+Test("tracker: a call on screen is never idle", () =>
+{
+    var (st, tr, _, run, day) = Setup();
+    var meet = new WindowInfo("chrome", "Meet – abc-defg-hij - Google Chrome");
+    run(20, meet, true, false);    // 20 min of listening, no input at all
+    tr.Shutdown();
+    True(Math.Abs(Total(st.DaysMap[day]) - 20 * Min) <= 2000, "all 20 min counted");
+    Eq(0, st.DaysMap[day].State.Idle.Count);
+    True(Classifier.IsCall(new WindowInfo("zoom", "Zoom")), "zoom");
+    True(!Classifier.IsCall(new WindowInfo("chrome", "Meeting notes - Google Docs - Google Chrome")), "doc about a meeting");
 });
 Test("tracker: locked screen is not offered back", () =>
 {

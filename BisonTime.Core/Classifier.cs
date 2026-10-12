@@ -93,6 +93,12 @@ public static class Classifier
         ("Пошук Google", @"[-–—]\s+(?:Пошук Google|Google Search|Поиск в Google)$"),
     }.Select(x => (x.Item1, new Regex(x.Item2, RegexOptions.IgnoreCase | RegexOptions.Compiled))).ToArray();
 
+    static readonly HashSet<string> CallApps = new(StringComparer.OrdinalIgnoreCase) { "zoom", "ms-teams", "teams", "webex", "ciscocollabhost" };
+    static readonly Regex CallTitle = new(@"(?:^|\s)Meet\s+[-–—]|Google Meet|Zoom Meeting|Zoom Workplace|\|\s*Microsoft Teams|Webex", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>A call is on screen: listening without touching the mouse is not idle.</summary>
+    public static bool IsCall(WindowInfo w) => CallApps.Contains(w.Proc) || CallTitle.IsMatch(w.Title ?? "");
+
     public const string ProjectSites = "Сайти й задачі проєктів";
     public const string OtherTabs = "Інші вкладки";
 

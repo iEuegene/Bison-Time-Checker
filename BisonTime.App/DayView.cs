@@ -17,7 +17,8 @@ internal sealed class DayView : Grid
     readonly bool _flyout;
     string _day = TimeUtil.DayKey(Now);
     readonly HashSet<string> _open = new();
-    bool _otherOpen, _showShort;
+    bool _otherOpen, _showShort, _chrono;
+    string? _openRow;
     readonly HashSet<string> _openApps = new(StringComparer.OrdinalIgnoreCase);
     string? _openVisit;
     readonly StackPanel _head = new();
@@ -301,6 +302,7 @@ internal sealed class DayView : Grid
     void AddManual(string project, int min) => UpdateDay(st =>
         st.Manual.Add(new ManualItem { Id = $"m{Now}", Project = project, Min = min, Label = $"Вручну +{min} хв" }));
 
+    /// <summary>A row of a project; a click on it shows when exactly the time was spent.</summary>
     UIElement RowEl(Row r)
     {
         var label = T(r.Label, 13, r.Disabled ? "FaintBrush" : "TextBrush");
@@ -311,7 +313,18 @@ internal sealed class DayView : Grid
         var key = r.Key;
         var sw = Toggle(!r.Disabled, on => UpdateDay(st => { if (on) st.Disabled.Remove(key); else st.Disabled[key] = true; }),
             r.Disabled ? "Не враховується" : "Враховується");
-        return Cols("*,Auto,Auto", what, dur.M(8, 0, 12, 0), sw).M(0, 5, 0, 5);
+        var whatBox = new Border { Background = Brushes.Transparent, Child = what, ToolTip = r.Pieces.Count > 0 ? "Клік — коли саме" : null };
+        if (r.Pieces.Count > 0) Clickable(whatBox, () => { _openRow = _openRow == key ? null : key; Render(); });
+        var line = Cols("*,Auto,Auto", whatBox, dur.M(8, 0, 12, 0), sw).M(0, 5, 0, 5);
+        if (_openRow != key || r.Pieces.Count == 0) return line;
+
+        var pieces = new StackPanel { Margin = new Thickness(10, 0, 0, 6) };
+        foreach (var x in r.Pieces)
+            pieces.Children.Add(Cols("*,Auto",
+                T($"{TimeUtil.Clock(x.S)} – {TimeUtil.Clock(x.E)}", 12, "MutedBrush"),
+                T(TimeUtil.FormatExact(x.Ms), 12, "FaintBrush")).M(0, 2, 0, 2));
+        var box = new Border { BorderBrush = B("LimeBrush"), BorderThickness = new Thickness(2, 0, 0, 0), Child = pieces, Margin = new Thickness(2, 0, 0, 0) };
+        return Col(0, line, box);
     }
 
     FrameworkElement CommentBox(ProjectReport p)
@@ -390,8 +403,13 @@ internal sealed class DayView : Grid
         if (_otherOpen)
         {
             var list = new StackPanel { Margin = new Thickness(14, 0, 14, 10) };
-            list.Children.Add(T("По програмах, найбільше часу зверху. У звіт не йде, поки не перенесеш у проєкт.", 11.5, "FaintBrush", wrap: true).M(0, 0, 0, 6));
-            foreach (var a in _report.OtherApps) list.Children.Add(OtherAppEl(a));
+            list.Children.Add(ModeSwitch().M(0, 0, 0, 8));
+            if (_chrono) Chronology(list);
+            else
+            {
+                list.Children.Add(T("Найбільше часу зверху. У звіт не йде, поки не перенесеш у проєкт.", 11.5, "FaintBrush", wrap: true).M(0, 0, 0, 6));
+                foreach (var a in _report.OtherApps) list.Children.Add(OtherAppEl(a));
+            }
             panel.Children.Add(list);
         }
         // Dashed outline: "outside the report".
@@ -399,6 +417,56 @@ internal sealed class DayView : Grid
         g.Children.Add(new Rectangle { Stroke = B("EdgeBrush"), StrokeThickness = 1, StrokeDashArray = new DoubleCollection { 4, 3 }, RadiusX = 14, RadiusY = 14 });
         g.Children.Add(panel);
         return g;
+    }
+
+    /// <summary>"По програмах" / "Хронологічно": a two-segment switch.</summary>
+    UIElement ModeSwitch()
+    {
+        Border Seg(string text, bool on, bool first, Action click)
+        {
+            var b = new Border
+            {
+                Background = on ? B("TonalBrush") : Brushes.Transparent, Padding = new Thickness(12, 5, 12, 5),
+                BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(first ? 0 : 1, 0, 0, 0),
+                Child = T(text, 12.5, on ? "LimeBrush" : "MutedBrush", FontWeights.Medium),
+            };
+            Clickable(b, click);
+            return b;
+        }
+        var row = HRow(
+            Seg("По програмах", !_chrono, true, () => { _chrono = false; Render(); }),
+            Seg("Хронологічно", _chrono, false, () => { _chrono = true; Render(); }));
+        return new Border { BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(16), Child = row, HorizontalAlignment = HorizontalAlignment.Left };
+    }
+
+    /// <summary>The day in order: visits to Інше between stretches of project work.</summary>
+    void Chronology(StackPanel list)
+    {
+        // Visits under a minute fold away; project stretches they split are glued back together.
+        var visible = new List<TimelineItem>();
+        var hidden = 0;
+        foreach (var t in _report.Timeline)
+        {
+            if (!t.IsSession && t.Moved == null && t.Ms < TimeUtil.Min && !_showShort) { hidden++; continue; }
+            if (t.IsSession && visible.Count > 0 && visible[^1] is { IsSession: true } last && last.Project == t.Project)
+            {
+                visible[^1] = new TimelineItem { IsSession = true, Project = last.Project, S = last.S, E = Math.Max(last.E, t.E) };
+                continue;
+            }
+            visible.Add(t);
+        }
+        foreach (var t in visible)
+        {
+            if (t.IsSession)
+            {
+                var name = HRow(new Ellipse { Width = 6, Height = 6, Fill = B("LimeBrush"), VerticalAlignment = VerticalAlignment.Center },
+                    T(t.Project ?? "", 12.5, "LimeBrush", FontWeights.Medium).M(8, 0, 0, 0), T("  у проєкті", 11.5, "FaintBrush"));
+                list.Children.Add(Cols("42,*,Auto", T(TimeUtil.Clock(t.S), 12, "FaintBrush"), name, T($"до {TimeUtil.Clock(t.E)}", 12, "FaintBrush")).M(0, 4, 0, 4));
+            }
+            else list.Children.Add(VisitRow(t, showApp: true));
+        }
+        if (hidden > 0 || _showShort)
+            list.Children.Add(HRow(Btn(_showShort ? "сховати короткі" : $"ще {hidden} коротких (<1 хв)", "Quiet", () => { _showShort = !_showShort; Render(); })).M(0, 4, 0, 0));
     }
 
     UIElement OtherAppEl(OtherApp a)
@@ -440,9 +508,9 @@ internal sealed class DayView : Grid
     }
 
     /// <summary>One compact line; a click on it shows "→ Проєкт" and "Ігнорувати".</summary>
-    UIElement VisitRow(TimelineItem t)
+    UIElement VisitRow(TimelineItem t, bool showApp = false)
     {
-        var label = T(t.Label, 12.5, t.Moved != null ? "MutedBrush" : "TextBrush");
+        var label = T(showApp ? $"{t.App} · {t.Label}" : t.Label, 12.5, t.Moved != null ? "MutedBrush" : "TextBrush");
         label.ToolTip = t.Label;
         var dur = t.Moved != null ? T($"→ {t.Moved}", 12, "LimeBrush") : T(TimeUtil.FormatExact(t.Ms), 12, "MutedBrush");
         var line = Cols("42,*,Auto", T(TimeUtil.Clock(t.S), 12, "FaintBrush"), label, dur.M(8, 0, 0, 0));

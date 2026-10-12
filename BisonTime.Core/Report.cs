@@ -11,6 +11,15 @@ public sealed class Row
     public long Ms { get; set; }
     public long RawMs { get; set; }
     public bool Disabled { get; init; }
+    /// <summary>When the time was spent, pieces closer than a minute glued together: the "розбір" of a row.</summary>
+    public List<Piece> Pieces { get; } = new();
+}
+
+public sealed class Piece
+{
+    public long S { get; set; }
+    public long E { get; set; }
+    public long Ms { get; set; }
 }
 
 public sealed class Group
@@ -96,7 +105,8 @@ public static class Report
 
     const long MergeGap = 2 * TimeUtil.Min;    // pieces closer than this read as one visit
     const long CommentMin = 5 * TimeUtil.Min;  // a source enters the comment draft from 5 min a day
-    const long MinRow = TimeUtil.Min;          // a row inside a project never counts less than a minute
+    const long MinProject = TimeUtil.Min;      // a project worked on at all counts at least a minute a day
+    const long PieceGap = TimeUtil.Min;        // row pieces closer than this read as one stretch
     const long ContextGap = 15 * TimeUtil.Min; // task-manager pages follow the project worked on within 15 min
 
     static string LowerFirst(string s)
@@ -170,7 +180,7 @@ public static class Report
             if (!projects.TryGetValue(name, out var p)) { p = new(); projects[name] = p; order.Add(name); }
             return p;
         }
-        Row AddRow(string project, string group, string rowKey, long ms, string label, string task, string app)
+        Row AddRow(string project, string group, string rowKey, long ms, string label, string task, string app, long s = 0, long e = 0)
         {
             var rows = Proj(project);
             var key = $"{project}|{rowKey}";
@@ -181,6 +191,11 @@ public static class Report
                 rows[key] = r;
             }
             r.Ms += ms;
+            if (e > s)
+            {
+                if (r.Pieces.Count > 0 && s - r.Pieces[^1].E <= PieceGap) { r.Pieces[^1].E = Math.Max(r.Pieces[^1].E, e); r.Pieces[^1].Ms += ms; }
+                else r.Pieces.Add(new Piece { S = s, E = e, Ms = ms });
+            }
             return r;
         }
 
@@ -204,7 +219,7 @@ public static class Report
             var last = timeline.Count > 0 ? timeline[^1] : null;
             if (c.Project != null)
             {
-                AddRow(c.Project, c.Group, c.RowKey, ms, c.Label, c.Task, c.App);
+                AddRow(c.Project, c.Group, c.RowKey, ms, c.Label, c.Task, c.App, seg.S, seg.E);
                 if (last is { IsSession: true } && last.Project == c.Project && seg.S - last.E <= MergeGap)
                     last.E = Math.Max(last.E, seg.E);
                 else
@@ -227,7 +242,7 @@ public static class Report
             if (state.Moved.TryGetValue(t.Key, out var target) && settings.Projects.ContainsKey(target))
             {
                 t.Moved = target;
-                AddRow(target, "manual", $"moved:{t.Key}", t.Ms, $"{t.Label} (перенесено)", "", t.App);
+                AddRow(target, "manual", $"moved:{t.Key}", t.Ms, $"{t.Label} (перенесено)", "", t.App, t.S, t.E);
             }
         }
         foreach (var m in state.Manual)
@@ -238,17 +253,16 @@ public static class Report
         foreach (var name in order)
         {
             var rows = projects[name].Values.ToList();
-            foreach (var r in rows)
-            {
-                r.RawMs = r.Ms;
-                if (r.Group != "manual" && r.Ms > 0 && r.Ms < MinRow) r.Ms = MinRow;
-            }
+            foreach (var r in rows) r.RawMs = r.Ms;
             var groups = Groups.Select(g => new Group
             {
                 Id = g.Id, Title = g.Title,
                 Rows = rows.Where(r => r.Group == g.Id).OrderByDescending(r => r.Ms).ToList(),
             }).Where(g => g.Rows.Count > 0).ToList();
+            // Rows count what was really spent; only a project as a whole is lifted to a minute,
+            // so twenty 10-second task pages add up to ~3 min, not 20.
             var exact = rows.Where(r => !r.Disabled).Sum(r => r.Ms);
+            if (exact > 0 && exact < MinProject) exact = MinProject;
             var rounded = TimeUtil.RoundMinutes(exact, settings.RoundStep);
             var p = new ProjectReport { Name = name, ExactMs = exact, Rounded = rounded, Groups = groups };
 
