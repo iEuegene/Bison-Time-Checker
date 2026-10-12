@@ -90,9 +90,57 @@ internal static class Ui
         Background = B(bg),
         BorderBrush = border == null ? Brushes.Transparent : B(border),
         BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(10),
+        CornerRadius = new CornerRadius(16),
         Padding = new Thickness(pad),
         Child = child,
+    };
+
+    // Segoe Fluent / MDL2 glyphs used across the app.
+    public static class G
+    {
+        public const string Today = "\uE823", Dashboard = "\uE9D2", Projects = "\uE8B7", Rules = "\uE71C", Tracking = "\uE916",
+            Help = "\uE897", Info = "\uE946", Pause = "\uE769", Stop = "\uE71A", Play = "\uE768", Copy = "\uE8C8",
+            Left = "\uE76B", Right = "\uE76C", Up = "\uE70E", Down = "\uE70D", Add = "\uE710", Update = "\uE895",
+            Settings = "\uE713", Check = "\uE73E";
+    }
+
+    /// <summary>Round icon-only button (M3 standard icon button).</summary>
+    public static Button IconBtn(string glyph, Action onClick, string? tip = null, double size = 16) =>
+        Btn(Glyph(glyph, size), "Icon", onClick, tip);
+
+    /// <summary>Button with a leading icon and a label.</summary>
+    public static Button IconText(string glyph, string text, string style, Action onClick, string? tip = null)
+    {
+        var fg = style == "Primary" ? "GreenBrush" : style == "Quiet" ? "MutedBrush" : "TextBrush";
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(Glyph(glyph, 14, fg));
+        content.Children.Add(new TextBlock { Text = text, FontFamily = TextFont, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+        return Btn(content, style, onClick, tip);
+    }
+
+    /// <summary>Rounded square with two letters of a project name.</summary>
+    public static Border Avatar(string name, bool active = false)
+    {
+        var letters = new string(name.Where(char.IsLetterOrDigit).Take(2).ToArray()).ToUpperInvariant();
+        return new Border
+        {
+            Width = 36, Height = 36, CornerRadius = new CornerRadius(12),
+            Background = B(active ? "LimeBrush" : "TonalBrush"), VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = letters, FontFamily = Display, FontSize = 11.5, FontWeight = FontWeights.Bold,
+                Foreground = B(active ? "GreenBrush" : "LimeBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+    }
+
+    /// <summary>Small filled label: lime for time that goes to the report, tonal otherwise.</summary>
+    public static Border Chip(string text, bool lime = true) => new()
+    {
+        Background = B(lime ? "LimeBrush" : "TonalBrush"), CornerRadius = new CornerRadius(8),
+        Padding = new Thickness(9, 4, 9, 4), VerticalAlignment = VerticalAlignment.Center,
+        Child = T(text, 12.5, lime ? "GreenBrush" : "TextBrush", FontWeights.SemiBold, ellipsis: false),
     };
 
     /// <summary>The Inweb parallelogram: a skewed lime plate with upright text.</summary>

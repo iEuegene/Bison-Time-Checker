@@ -19,8 +19,7 @@ public partial class App : Application
     WinForms.ToolStripMenuItem _pauseItem = null!, _finishItem = null!;
     System.Drawing.Icon _iconNormal = null!, _iconPaused = null!, _iconDone = null!;
     MainWindow? _main;
-    SettingsWindow? _settings;
-    DashboardWindow? _dashboard;
+    AppWindow? _app;
     long _lastStats;
     readonly WindowWatcher _watcher = new();
     DispatcherTimer _timer = null!;
@@ -76,7 +75,7 @@ public partial class App : Application
         _timer.Start();
         Sample();
 
-        if (firstRun) ShowMain();
+        if (firstRun) ShowApp(AppPage.Today);
     }
 
     void Sample()
@@ -186,20 +185,22 @@ public partial class App : Application
         _iconPaused = LoadIcon("bt-paused.ico");
         _iconDone = LoadIcon("bt-done.ico");
         var menu = new WinForms.ContextMenuStrip();
-        menu.Items.Add("Відкрити", null, (_, _) => ShowMain());
+        menu.Items.Add("Вікно дня", null, (_, _) => ShowMain());
+        menu.Items.Add("Відкрити Bison Time Checker", null, (_, _) => ShowApp(AppPage.Today));
         _pauseItem = new WinForms.ToolStripMenuItem("Пауза", null, (_, _) => TogglePause()) { ShortcutKeyDisplayString = "Alt+Shift+P" };
         menu.Items.Add(_pauseItem);
         _finishItem = new WinForms.ToolStripMenuItem("Завершити роботу", null, (_, _) => { if (Tracker.Done) Resume(); else { FinishDay(); ShowMain(); } });
         menu.Items.Add(_finishItem);
         menu.Items.Add(new WinForms.ToolStripSeparator());
-        menu.Items.Add("Дашборд", null, (_, _) => ShowDashboard());
-        menu.Items.Add("Налаштування", null, (_, _) => ShowSettings());
-        menu.Items.Add("Довідка", null, (_, _) => ShowSettings(5));
+        menu.Items.Add("Дашборд", null, (_, _) => ShowApp(AppPage.Dashboard));
+        menu.Items.Add("Налаштування", null, (_, _) => ShowApp(AppPage.Projects));
+        menu.Items.Add("Довідка", null, (_, _) => ShowApp(AppPage.Help));
+        menu.Items.Add("Про BT і оновлення", null, (_, _) => ShowApp(AppPage.About));
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("Вийти з Bison Time Checker", null, (_, _) => Shutdown());
         _tray = new WinForms.NotifyIcon { Icon = _iconNormal, Visible = true, Text = "Bison Time Checker", ContextMenuStrip = menu };
         _tray.MouseClick += (_, ev) => { if (ev.Button == WinForms.MouseButtons.Left) ToggleMain(); };
-        _tray.BalloonTipClicked += (_, _) => ShowSettings(5);
+        _tray.BalloonTipClicked += (_, _) => ShowApp(AppPage.About);
     }
 
     void UpdateTray()
@@ -283,36 +284,18 @@ public partial class App : Application
         ShowMain();
     }
 
-    public void ShowSettings(int tab = 0)
+    /// <summary>The main window on a given page.</summary>
+    public void ShowApp(AppPage page)
     {
-        if (_settings == null)
+        if (_app == null)
         {
-            _settings = new SettingsWindow();
-            _settings.Closed += (_, _) => _settings = null;
+            _app = new AppWindow();
+            _app.Closed += (_, _) => _app = null;
         }
-        _settings.Select(tab);
-        _settings.Show();
-        if (_settings.WindowState == WindowState.Minimized) _settings.WindowState = WindowState.Normal;
-        _settings.Activate();
-    }
-
-    public void ShowDashboard()
-    {
-        if (_dashboard == null)
-        {
-            _dashboard = new DashboardWindow();
-            _dashboard.Closed += (_, _) => _dashboard = null;
-        }
-        _dashboard.Show();
-        if (_dashboard.WindowState == WindowState.Minimized) _dashboard.WindowState = WindowState.Normal;
-        _dashboard.Activate();
-    }
-
-    /// <summary>Open the flyout on a given day, for corrections from the dashboard.</summary>
-    public void ShowDay(string day)
-    {
-        _main ??= new MainWindow();
-        _main.ShowNearTray(day);
+        _app.Select(page);
+        _app.Show();
+        if (_app.WindowState == WindowState.Minimized) _app.WindowState = WindowState.Normal;
+        _app.Activate();
     }
 
     public static void OpenFolder(string dir) =>

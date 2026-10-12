@@ -8,27 +8,43 @@ using static BisonTime.App.Ui;
 
 namespace BisonTime.App;
 
-/// <summary>Settings split into pages, like Bison Switcher: projects, rules, ignore, tracking, data.</summary>
-internal sealed class SettingsWindow : Window
+/// <summary>Pages of the main window, in rail order.</summary>
+public enum AppPage { Today, Dashboard, Projects, Rules, Tracking, Help, About }
+
+/// <summary>
+/// The main window (variant A, Material 3): a navigation rail on the left, one page on the right.
+/// Today and the dashboard live here next to the settings; the tray flyout stays for a quick look.
+/// </summary>
+internal sealed class AppWindow : Window
 {
-    static readonly (string Title, string Glyph)[] Tabs =
+    static readonly (AppPage Page, string Title, string Glyph)[] Rail =
     {
-        ("Проєкти", ""), ("Правила", ""), ("Ігнор", ""), ("Облік", ""), ("Дані", ""), ("Довідка", ""),
+        (AppPage.Today, "Сьогодні", G.Today), (AppPage.Dashboard, "Дашборд", G.Dashboard), (AppPage.Projects, "Проєкти", G.Projects),
+        (AppPage.Rules, "Правила", G.Rules), (AppPage.Tracking, "Облік", G.Tracking),
+    };
+    static readonly (AppPage Page, string Title, string Glyph)[] RailBottom =
+    {
+        (AppPage.Help, "Довідка", G.Help), (AppPage.About, "Про BT", G.Info),
     };
 
-    int _tab;
-    readonly StackPanel _nav = new() { Margin = new Thickness(0, 22, 0, 0) };
-    readonly StackPanel _page = new() { Margin = new Thickness(36, 30, 36, 30), MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left };
+    AppPage _tab = AppPage.Today;
+    readonly StackPanel _nav = new();
+    readonly StackPanel _navBottom = new();
+    readonly StackPanel _page = new() { Margin = new Thickness(36, 30, 36, 36), MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Left };
+    readonly ScrollViewer _scroll;
+    readonly ContentControl _host = new();
+    DayView? _today;
+    DashboardView? _dashboard;
     Settings _s = new();
     UpdatePanel? _update;
 
-    public SettingsWindow()
+    public AppWindow()
     {
-        Title = "Bison Time Checker — налаштування";
-        Width = 1000;
-        Height = 660;
-        MinWidth = 820;
-        MinHeight = 520;
+        Title = "Bison Time Checker";
+        Width = 1120;
+        Height = 780;
+        MinWidth = 900;
+        MinHeight = 560;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = B("BgBrush");
         Foreground = B("TextBrush");
@@ -38,28 +54,37 @@ internal sealed class SettingsWindow : Window
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Ideal);
         try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/bt-64.png")); } catch { /* cosmetic */ }
 
-        var logo = new Image { Source = new BitmapImage(new Uri("pack://application:,,,/Assets/bt-64.png")), Width = 40, Height = 40 };
-        var brand = HRow(logo, Col(0, T("Bison Time", 13, display: true, weight: FontWeights.Bold), T("Checker", 13, display: true, weight: FontWeights.Bold),
-            T($"v{typeof(App).Assembly.GetName().Version?.ToString(3)}", 12, "MutedBrush")).M(10, 0, 0, 0));
-        var note = T("Усе зберігається лише на цьому комп'ютері. В інтернет BT ходить лише по оновлення на GitHub і нічого не надсилає.", 12, "FaintBrush", wrap: true);
-        var side = new DockPanel { Margin = new Thickness(14, 22, 14, 18), LastChildFill = true };
-        DockPanel.SetDock(brand, Dock.Top);
-        DockPanel.SetDock(note, Dock.Bottom);
-        side.Children.Add(brand);
-        side.Children.Add(note);
-        side.Children.Add(_nav);
-        var sideBox = new Border { Background = B("SideBrush"), BorderBrush = B("LineBrush"), BorderThickness = new Thickness(0, 0, 1, 0), Child = side };
+        var logo = Plate("BT").M(0, 0, 0, 22);
+        logo.HorizontalAlignment = HorizontalAlignment.Center;
+        var rail = new DockPanel { Margin = new Thickness(0, 20, 0, 16), LastChildFill = true };
+        DockPanel.SetDock(logo, Dock.Top);
+        DockPanel.SetDock(_navBottom, Dock.Bottom);
+        rail.Children.Add(logo);
+        rail.Children.Add(_navBottom);
+        rail.Children.Add(_nav);
+        var railBox = new Border { Background = B("SideBrush"), BorderBrush = B("LineBrush"), BorderThickness = new Thickness(0, 0, 1, 0), Child = rail };
 
-        var scroll = new ScrollViewer { Content = _page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        Content = Cols("240,*", sideBox, scroll);
-        Closed += (_, _) => _update?.Detach();
+        _scroll = new ScrollViewer { Content = _page, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        Content = Cols("96,*", railBox, _host);
+        App.Instance.UpdateChanged += OnUpdateChanged;
+        Closed += (_, _) => { _update?.Detach(); App.Instance.UpdateChanged -= OnUpdateChanged; };
         Render();
     }
 
-    public void Select(int tab)
+    void OnUpdateChanged() => Dispatcher.BeginInvoke(RenderRail);
+
+    public void Select(AppPage page)
     {
-        _tab = Math.Clamp(tab, 0, Tabs.Length - 1);
+        _tab = page;
         Render();
+    }
+
+    /// <summary>Open a given day on the "Сьогодні" page (from a click in the dashboard).</summary>
+    public void ShowDay(string day)
+    {
+        _tab = AppPage.Today;
+        Render();
+        _today!.Open(day);
     }
 
     void Save(Action<Settings> change)
@@ -70,36 +95,69 @@ internal sealed class SettingsWindow : Window
         Render();
     }
 
+    /// <summary>M3 navigation rail item: icon in a pill (lime when active) with the label under it.</summary>
+    UIElement RailItem((AppPage Page, string Title, string Glyph) it, bool badge)
+    {
+        var on = it.Page == _tab;
+        var pill = new Grid { Width = 56, Height = 32 };
+        pill.Children.Add(new Border { CornerRadius = new CornerRadius(16), Background = on ? B("LimeBrush") : Brushes.Transparent });
+        pill.Children.Add(Glyph(it.Glyph, 18, on ? "GreenBrush" : "MutedBrush"));
+        if (badge)
+            pill.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 8, Height = 8, Fill = B("OrangeBrush"), HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 12, 0),
+            });
+        var label = T(it.Title, 12, on ? "LimeBrush" : "MutedBrush", on ? FontWeights.SemiBold : FontWeights.Medium);
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        var box = new StackPanel { Background = Brushes.Transparent, Margin = new Thickness(0, 4, 0, 10) };
+        box.Children.Add(pill);
+        box.Children.Add(label.M(0, 4, 0, 0));
+        if (!on)
+        {
+            box.MouseEnter += (_, _) => ((Border)pill.Children[0]).Background = B("CardHiBrush");
+            box.MouseLeave += (_, _) => ((Border)pill.Children[0]).Background = Brushes.Transparent;
+        }
+        Clickable(box, () => { _tab = it.Page; Render(); });
+        return box;
+    }
+
+    void RenderRail()
+    {
+        _nav.Children.Clear();
+        foreach (var it in Rail) _nav.Children.Add(RailItem(it, false));
+        _navBottom.Children.Clear();
+        foreach (var it in RailBottom) _navBottom.Children.Add(RailItem(it, it.Page == AppPage.About && App.Instance.Update != null));
+    }
+
     void Render()
     {
         _s = App.Store.LoadSettings();
-        _nav.Children.Clear();
-        for (var i = 0; i < Tabs.Length; i++)
+        RenderRail();
+        Title = "Bison Time Checker — " + Rail.Concat(RailBottom).First(x => x.Page == _tab).Title;
+        switch (_tab)
         {
-            var idx = i;
-            var on = i == _tab;
-            var item = Cols("14,*", on ? Mark(18) : null, T(Tabs[i].Title, 14, on ? "TextBrush" : "MutedBrush", FontWeights.Medium).M(6, 0, 0, 0));
-            var box = new Border
-            {
-                Background = on ? B("CardHiBrush") : Brushes.Transparent,
-                BorderBrush = on ? new SolidColorBrush(Color.FromRgb(0x24, 0x53, 0x3F)) : Brushes.Transparent,
-                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(8, 9, 12, 9),
-                Margin = new Thickness(0, 0, 0, 2), Child = item,
-            };
-            Clickable(box, () => { _tab = idx; Render(); });
-            _nav.Children.Add(box);
+            case AppPage.Today:
+                if (_today == null) { _today = new DayView(flyout: false); _today.Open(); }
+                _host.Content = _today;
+                return;
+            case AppPage.Dashboard:
+                _dashboard ??= new DashboardView(day => ShowDay(day));
+                _dashboard.Render();
+                _host.Content = _dashboard;
+                return;
         }
-
+        _host.Content = _scroll;
         _page.Children.Clear();
         switch (_tab)
         {
-            case 0: ProjectsPage(); break;
-            case 1: RulesPage(); break;
-            case 2: IgnorePage(); break;
-            case 3: TrackingPage(); break;
-            case 4: DataPage(); break;
-            default: HelpPage(); break;
+            case AppPage.Projects: ProjectsPage(); break;
+            case AppPage.Rules: RulesPage(); break;
+            case AppPage.Tracking: TrackingPage(); break;
+            case AppPage.Help: HelpPage(); break;
+            default: AboutPage(); break;
         }
+        _scroll.ScrollToTop();
     }
 
     void H1(string title, string lead)
@@ -220,11 +278,8 @@ internal sealed class SettingsWindow : Window
         H2("Таск-менеджери", "Фрагменти заголовка, за якими BT впізнає таск-менеджер. Задача з доменом клієнта в назві йде в цей проєкт; " +
             "сторінка без нього (планувальник, списки) — у проєкт, над яким ти працював у межах 15 хв до або після.");
         ListEditor(_s.WorkTools, "Planfix", "Список порожній.", (s, list) => s.WorkTools = list);
-    }
 
-    void IgnorePage()
-    {
-        H1("Ігнор", "Що BT не записує взагалі: програма (telegram, spotify) або фрагмент заголовка (YouTube, Rozetka). " +
+        H2("Ігнор", "Що BT не записує взагалі: програма (telegram, spotify) або фрагмент заголовка (YouTube, Rozetka). " +
             "Перевіряється за входженням, без урахування регістру.");
         ListEditor(_s.Ignore, "telegram або YouTube", "Список порожній.", (s, list) => s.Ignore = list);
     }
@@ -239,7 +294,7 @@ internal sealed class SettingsWindow : Window
 
     void TrackingPage()
     {
-        H1("Облік", "Коли BT ставить облік на паузу і як округлює підсумок проєкту.");
+        H1("Облік", "Коли BT ставить облік на паузу, як округлює підсумок і де лежать дані.");
         var idle = Input(_s.IdleMin.ToString());
         idle.Width = 70;
         idle.TextAlignment = TextAlignment.Right;
@@ -261,13 +316,11 @@ internal sealed class SettingsWindow : Window
             Field("Округлення підсумку", "Лише підсумок проєкту. Кожен рядок рахується щонайменше як 1 хв.", steps),
             Field("Запускати з Windows", "BT стартує тихо в треї після входу в систему.", auto),
             Field("Перевіряти оновлення щодня", "Раз на добу BT питає GitHub, чи є нова версія, і показує її в треї. Оновлення ставиться лише після твого кліку.", upd),
-            Field("Пауза", "Alt+Shift+P з будь-якої програми або кнопка у вікні BT. Іконка в треї стає помаранчевою.", T("Alt+Shift+P", 13, "LimeBrush", FontWeights.SemiBold)),
+            Field("Пауза", "Alt+Shift+P з будь-якої програми або кнопка у вікні дня. Іконка в треї стає помаранчевою.", T("Alt+Shift+P", 13, "LimeBrush", FontWeights.SemiBold)),
+            Field("Завершити роботу", "Кнопка у вікні дня або в меню трею: облік зупиняється до 05:00 і вмикається сам. Іконка в треї сіра.", T("до 05:00", 13, "LimeBrush", FontWeights.SemiBold)),
         }, ""));
-    }
 
-    void DataPage()
-    {
-        H1("Дані", "Усе лежить у папці BisonTime в AppData цього користувача: файл на день, налаштування, журнал. Сирі записи вікон зберігаються 7 днів, дні — 30, цифри для дашборда без назв вікон — рік.");
+        H2("Дані", "Усе лежить у папці BisonTime в AppData цього користувача: файл на день, налаштування, журнал. Сирі записи вікон зберігаються 7 днів, дні — 30, цифри для дашборда без назв вікон — рік.");
         var status = T("", 13, "LimeBrush", wrap: true);
         _page.Children.Add(HRow(
             Btn("Відкрити папку з даними", "Primary", () => App.OpenFolder(App.Store.Dir)),
@@ -295,38 +348,43 @@ internal sealed class SettingsWindow : Window
 
     void HelpPage()
     {
+        H1("Довідка", "Як BT рахує час і як ним користуватися. " + HelpContent.Made);
+        foreach (var (title, lines) in HelpContent.Guide)
+        {
+            var body = new StackPanel();
+            foreach (var line in lines)
+            {
+                if (line.StartsWith("• "))
+                    body.Children.Add(Cols("18,*", T("•", 13, "LimeBrush"), T(line[2..], 13, wrap: true)).M(0, 0, 0, 7));
+                else
+                    body.Children.Add(T(line, 13, wrap: true).M(0, 0, 0, 8));
+            }
+            _page.Children.Add(Card(Col(10, T(title, 15, display: true, weight: FontWeights.Bold), body), pad: 20).M(0, 0, 0, 12));
+        }
+    }
+
+    void AboutPage()
+    {
         var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "";
-        H1("Довідка", HelpContent.Made);
+        H1("Про BT", HelpContent.Made);
         // The panel survives re-renders (a download keeps its progress): unhook it from the old card.
         if (_update?.Parent is Border old) old.Child = null;
 
-        // About: version, copyright, links
         _page.Children.Add(ListCard(new UIElement[]
         {
-            Cols("*,Auto", Col(3, T($"Bison Time Checker {version}", 14, weight: FontWeights.SemiBold), T(HelpContent.Copyright + " · ліцензія MIT", 12, "MutedBrush")),
+            Cols("*,Auto", Col(3, T($"Bison Time Checker {version}", 15, weight: FontWeights.SemiBold), T(HelpContent.Copyright + " · ліцензія MIT", 12, "MutedBrush")),
                 HRow(Btn("GitHub", "Ghost", () => Open(HelpContent.Repo), HelpContent.Repo),
                      Btn("Релізи", "Ghost", () => Open(HelpContent.Releases), "Усі версії на GitHub").M(6, 0, 0, 0),
                      Btn("Повідомити про проблему", "Ghost", () => Open(HelpContent.Issues)).M(6, 0, 0, 0))),
             _update ??= new UpdatePanel(),
         }, ""));
 
-        foreach (var (title, lines) in HelpContent.Guide)
-        {
-            _page.Children.Add(T(title, 16, display: true, weight: FontWeights.Bold).M(0, 28, 0, 8));
-            foreach (var line in lines)
-            {
-                if (line.StartsWith("• "))
-                    _page.Children.Add(Cols("18,*", T("•", 13, "LimeBrush"), T(line[2..], 13, wrap: true)).M(0, 0, 0, 6));
-                else
-                    _page.Children.Add(T(line, 13, wrap: true).M(0, 0, 0, 8));
-            }
-        }
-
-        _page.Children.Add(T("Що нового", 16, display: true, weight: FontWeights.Bold).M(0, 28, 0, 8));
+        H2("Що нового", "Кожна версія одним рядком.");
         _page.Children.Add(ListCard(HelpContent.Changes.Select(c =>
             (UIElement)Cols("70,*", T(c.Version, 13, "LimeBrush", FontWeights.SemiBold), T(c.Text, 13, wrap: true))), ""));
 
-        _page.Children.Add(T("Правова інформація", 16, display: true, weight: FontWeights.Bold).M(0, 28, 0, 8));
-        foreach (var line in HelpContent.Legal) _page.Children.Add(T(line, 12, "MutedBrush", wrap: true).M(0, 0, 0, 8));
+        H2("Правова інформація", "");
+        foreach (var line in HelpContent.Legal) _page.Children.Add(T(line, 12.5, "MutedBrush", wrap: true).M(0, 0, 0, 8));
+        _page.Children.Add(T("Усе зберігається лише на цьому комп'ютері. В інтернет BT ходить лише по оновлення на GitHub і нічого не надсилає.", 12.5, "FaintBrush", wrap: true).M(0, 8, 0, 0));
     }
 }

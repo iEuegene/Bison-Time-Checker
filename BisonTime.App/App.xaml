@@ -7,71 +7,86 @@
         <FontFamily x:Key="Text">pack://application:,,,/Fonts/#Geist</FontFamily>
         <FontFamily x:Key="Display">pack://application:,,,/Fonts/#Unbounded</FontFamily>
 
-        <SolidColorBrush x:Key="BgBrush" Color="#071F17"/>
-        <SolidColorBrush x:Key="SideBrush" Color="#0A271D"/>
-        <SolidColorBrush x:Key="CardBrush" Color="#0E3125"/>
-        <SolidColorBrush x:Key="CardHiBrush" Color="#133B2D"/>
-        <SolidColorBrush x:Key="LineBrush" Color="#1F4A3B"/>
-        <SolidColorBrush x:Key="EdgeBrush" Color="#2E5E4C"/>
-        <SolidColorBrush x:Key="TextBrush" Color="#F7F7F7"/>
-        <SolidColorBrush x:Key="MutedBrush" Color="#94ADA3"/>
-        <SolidColorBrush x:Key="FaintBrush" Color="#5E7D71"/>
+        <!-- Variant A: Material 3 dark on Inweb green. Tonal surfaces, lime as the primary container. -->
+        <SolidColorBrush x:Key="BgBrush" Color="#0B2219"/>
+        <SolidColorBrush x:Key="SideBrush" Color="#0B2219"/>
+        <SolidColorBrush x:Key="HeadBrush" Color="#12352A"/>
+        <SolidColorBrush x:Key="CardBrush" Color="#13342A"/>
+        <SolidColorBrush x:Key="CardHiBrush" Color="#183D31"/>
+        <SolidColorBrush x:Key="TonalBrush" Color="#2C4A3E"/>
+        <SolidColorBrush x:Key="LineBrush" Color="#1D3D31"/>
+        <SolidColorBrush x:Key="EdgeBrush" Color="#3A5A4D"/>
+        <SolidColorBrush x:Key="TextBrush" Color="#E8F0EC"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#9DB5AB"/>
+        <SolidColorBrush x:Key="FaintBrush" Color="#6F8C80"/>
         <SolidColorBrush x:Key="LimeBrush" Color="#F0FC7E"/>
         <SolidColorBrush x:Key="OrangeBrush" Color="#EF583D"/>
         <SolidColorBrush x:Key="GreenBrush" Color="#003B29"/>
 
-        <!-- Buttons -->
+        <!-- Buttons: M3 pills. Primary = filled lime, Tonal = filled green, Ghost = outlined, Quiet = text. -->
         <Style x:Key="Primary" TargetType="Button">
             <Setter Property="Foreground" Value="#003B29"/>
             <Setter Property="Background" Value="#F0FC7E"/>
             <Setter Property="BorderBrush" Value="#F0FC7E"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="MinHeight" Value="36"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" CornerRadius="8" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="b" CornerRadius="18" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"/>
+                            <Border x:Name="state" CornerRadius="18" Background="{TemplateBinding Foreground}" Opacity="0"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Opacity" Value="0.88"/>
+                                <Setter TargetName="state" Property="Opacity" Value="0.08"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="b" Property="Opacity" Value="0.75"/>
+                                <Setter TargetName="state" Property="Opacity" Value="0.14"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="b" Property="Opacity" Value="0.4"/>
+                                <Setter Property="Opacity" Value="0.38"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="Tonal" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Foreground" Value="#E8F0EC"/>
+            <Setter Property="Background" Value="#2C4A3E"/>
+            <Setter Property="BorderBrush" Value="#2C4A3E"/>
+        </Style>
         <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource Primary}">
-            <Setter Property="Foreground" Value="#F7F7F7"/>
+            <Setter Property="Foreground" Value="#E8F0EC"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="#2E5E4C"/>
+            <Setter Property="BorderBrush" Value="#3A5A4D"/>
             <Setter Property="FontWeight" Value="Medium"/>
         </Style>
         <Style x:Key="Quiet" TargetType="Button" BasedOn="{StaticResource Primary}">
-            <Setter Property="Foreground" Value="#94ADA3"/>
+            <Setter Property="Foreground" Value="#9DB5AB"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="MinHeight" Value="32"/>
+        </Style>
+        <Style x:Key="Icon" TargetType="Button" BasedOn="{StaticResource Quiet}">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="MinHeight" Value="0"/>
         </Style>
         <Style x:Key="Big" TargetType="Button" BasedOn="{StaticResource Primary}">
-            <Setter Property="Foreground" Value="#F0FC7E"/>
-            <Setter Property="Background" Value="#003B29"/>
-            <Setter Property="BorderBrush" Value="#003B29"/>
             <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="Padding" Value="20,10"/>
         </Style>
 
         <!-- Toggle switch: lime track + green knob when on, like BS -->
@@ -82,9 +97,9 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
-                        <Grid Width="30" Height="17" Background="Transparent">
-                            <Border x:Name="track" CornerRadius="9" Background="#16392C" BorderBrush="#2E5E4C" BorderThickness="1"/>
-                            <Ellipse x:Name="knob" Width="11" Height="11" Fill="#94ADA3" HorizontalAlignment="Left" Margin="3,0,0,0"/>
+                        <Grid Width="44" Height="24" Background="Transparent">
+                            <Border x:Name="track" CornerRadius="12" Background="#13342A" BorderBrush="#6F8C80" BorderThickness="2"/>
+                            <Ellipse x:Name="knob" Width="12" Height="12" Fill="#6F8C80" HorizontalAlignment="Left" Margin="6,0,0,0"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
@@ -92,7 +107,9 @@
                                 <Setter TargetName="track" Property="BorderBrush" Value="#F0FC7E"/>
                                 <Setter TargetName="knob" Property="Fill" Value="#003B29"/>
                                 <Setter TargetName="knob" Property="HorizontalAlignment" Value="Right"/>
-                                <Setter TargetName="knob" Property="Margin" Value="0,0,3,0"/>
+                                <Setter TargetName="knob" Property="Width" Value="16"/>
+                                <Setter TargetName="knob" Property="Height" Value="16"/>
+                                <Setter TargetName="knob" Property="Margin" Value="0,0,4,0"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -102,17 +119,17 @@
 
         <!-- Text input -->
         <Style x:Key="Input" TargetType="TextBox">
-            <Setter Property="Foreground" Value="#F7F7F7"/>
-            <Setter Property="Background" Value="#0A271D"/>
-            <Setter Property="BorderBrush" Value="#1F4A3B"/>
+            <Setter Property="Foreground" Value="#E8F0EC"/>
+            <Setter Property="Background" Value="#0E281F"/>
+            <Setter Property="BorderBrush" Value="#3A5A4D"/>
             <Setter Property="CaretBrush" Value="#F0FC7E"/>
             <Setter Property="SelectionBrush" Value="#F0FC7E"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Padding" Value="6,5"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="10,8"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
-                        <Border x:Name="b" CornerRadius="8" Background="{TemplateBinding Background}"
+                        <Border x:Name="b" CornerRadius="12" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
                         </Border>
@@ -128,16 +145,16 @@
 
         <!-- Menus (project pickers) in the dark palette -->
         <Style TargetType="ContextMenu">
-            <Setter Property="Background" Value="#0E3125"/>
-            <Setter Property="Foreground" Value="#F7F7F7"/>
-            <Setter Property="BorderBrush" Value="#2E5E4C"/>
+            <Setter Property="Background" Value="#183D31"/>
+            <Setter Property="Foreground" Value="#E8F0EC"/>
+            <Setter Property="BorderBrush" Value="#3A5A4D"/>
             <Setter Property="FontFamily" Value="{StaticResource Text}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ContextMenu">
                         <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="1" CornerRadius="8" Padding="4">
+                                BorderThickness="1" CornerRadius="12" Padding="6">
                             <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto">
                                 <ItemsPresenter/>
                             </ScrollViewer>
@@ -147,16 +164,16 @@
             </Setter>
         </Style>
         <Style TargetType="MenuItem">
-            <Setter Property="Foreground" Value="#F7F7F7"/>
+            <Setter Property="Foreground" Value="#E8F0EC"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="MenuItem">
-                        <Border x:Name="b" Background="Transparent" CornerRadius="6" Padding="10,6">
+                        <Border x:Name="b" Background="Transparent" CornerRadius="8" Padding="12,8">
                             <ContentPresenter ContentSource="Header"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="#1F4A3B"/>
+                                <Setter TargetName="b" Property="Background" Value="#2C4A3E"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -165,9 +182,9 @@
         </Style>
 
         <Style TargetType="ToolTip">
-            <Setter Property="Background" Value="#0A271D"/>
-            <Setter Property="Foreground" Value="#F7F7F7"/>
-            <Setter Property="BorderBrush" Value="#2E5E4C"/>
+            <Setter Property="Background" Value="#0E281F"/>
+            <Setter Property="Foreground" Value="#E8F0EC"/>
+            <Setter Property="BorderBrush" Value="#3A5A4D"/>
         </Style>
 
         <!-- Slim scrollbar -->
@@ -182,7 +199,7 @@
                                 <Thumb>
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Border Background="#1F4A3B" CornerRadius="4" Margin="1"/>
+                                            <Border Background="#2C4A3E" CornerRadius="4" Margin="1"/>
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
