@@ -156,7 +156,7 @@ internal sealed class DashboardWindow : Window
         T(note, 11.5, "FaintBrush", wrap: true)), pad: 16);
 
     /// <summary>One stacked bar per day: projects in lime, Інше muted. A click opens the day while it is editable.</summary>
-    UIElement DaysChart(List<string> days, Dictionary<string, DayStats> data)
+    FrameworkElement DaysChart(List<string> days, Dictionary<string, DayStats> data)
     {
         const double H = 130;
         var max = Math.Max(data.Values.Select(d => d.TrackedMs).DefaultIfEmpty(0).Max(), TimeUtil.Min);
@@ -198,7 +198,7 @@ internal sealed class DashboardWindow : Window
     static Border Swatch(Brush b) => new() { Width = 10, Height = 10, CornerRadius = new CornerRadius(2), Background = b, VerticalAlignment = VerticalAlignment.Center };
 
     /// <summary>Donut plus the list it stands for, biggest first, the tail folded into "Решта".</summary>
-    static UIElement Breakdown(string title, string note, Dictionary<string, long> d)
+    static FrameworkElement Breakdown(string title, string note, Dictionary<string, long> d)
     {
         var slices = Stats.Top(d, 8);
         var head = Col(3, T(title, 14, weight: FontWeights.SemiBold), T(note, 11.5, "FaintBrush", wrap: true));
@@ -265,7 +265,7 @@ internal sealed class DashboardWindow : Window
         return g;
     }
 
-    static UIElement ProjectsCard(DayStats sum)
+    static FrameworkElement ProjectsCard(DayStats sum)
     {
         var head = Col(3, T("Проєкти", 14, weight: FontWeights.SemiBold),
             T("Точний час до округлення. Округлений підсумок для звіту — у вікні дня.", 11.5, "FaintBrush", wrap: true));
