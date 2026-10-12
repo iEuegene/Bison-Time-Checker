@@ -420,7 +420,7 @@ internal sealed class DayView : Grid
     }
 
     /// <summary>"По програмах" / "Хронологічно": a two-segment switch.</summary>
-    UIElement ModeSwitch()
+    FrameworkElement ModeSwitch()
     {
         Border Seg(string text, bool on, bool first, Action click)
         {
