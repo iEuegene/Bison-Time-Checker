@@ -24,6 +24,8 @@ internal sealed class DayView : Grid
     readonly HashSet<string> _openApps = new(StringComparer.OrdinalIgnoreCase);
     string? _openVisit;
     readonly StackPanel _head = new();
+    readonly StackPanel _sticky = new();
+    string? _anchor;                                         // last ticked visit: Shift+click selects up to here
     readonly StackPanel _body = new() { Margin = new Thickness(12, 12, 12, 16) };
     readonly ScrollViewer _scroll;
     readonly DispatcherTimer _refresh;
@@ -45,13 +47,17 @@ internal sealed class DayView : Grid
     {
         _flyout = flyout;
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });   // sticky: bulk-move bar and rule hint
         RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var headBox = new Border { Background = B("HeadBrush"), Padding = new Thickness(flyout ? 18 : 28, 14, flyout ? 14 : 28, 16), Child = _head };
         if (flyout) headBox.CornerRadius = new CornerRadius(19, 19, 0, 0);   // inside the flyout's rounded sheet
         _scroll = new ScrollViewer { Content = _body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         if (!flyout) _body.Margin = new Thickness(24, 16, 24, 24);
-        SetRow(_scroll, 1);
+        _sticky.Margin = flyout ? new Thickness(12, 10, 12, 0) : new Thickness(24, 12, 24, 0);
+        SetRow(_sticky, 1);
+        SetRow(_scroll, 2);
         Children.Add(headBox);
+        Children.Add(_sticky);
         Children.Add(_scroll);
 
         _refresh = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
@@ -212,6 +218,10 @@ internal sealed class DayView : Grid
     void Render()
     {
         RenderHead();
+        // Under the header, outside the scroll: stays in view however far down the ticks are.
+        _sticky.Children.Clear();
+        if (RuleHint() is { } hint) _sticky.Children.Add(hint);
+        if (SelectionBar() is { } bar) _sticky.Children.Add(bar);
         var offset = _scroll.VerticalOffset;
         _body.Children.Clear();
         void Add(UIElement? e, double gap = 6) { if (e is FrameworkElement fe) { fe.Margin = new Thickness(0, 0, 0, gap); _body.Children.Add(fe); } }
@@ -410,8 +420,6 @@ internal sealed class DayView : Grid
         {
             var list = new StackPanel { Margin = new Thickness(14, 0, 14, 10) };
             list.Children.Add(ModeSwitch().M(0, 0, 0, 8));
-            if (RuleHint() is { } hint) list.Children.Add(hint);
-            if (SelectionBar() is { } bar) list.Children.Add(bar);
             if (_chrono) Chronology(list);
             else
             {
@@ -461,8 +469,11 @@ internal sealed class DayView : Grid
         var ms = sel.Sum(t => t.Ms);
         var move = Picker("→ Проєкт", "Primary", ProjectNames(), MoveSelected, "Перенести всі вибрані записи в проєкт");
         var text = T($"Вибрано {sel.Count} · {TimeUtil.FormatExact(ms)}", 13, weight: FontWeights.SemiBold);
-        var bar = Cols("*,Auto,Auto", text, move, Btn("Скасувати", "Quiet", () => { _sel.Clear(); Render(); }).M(4, 0, 0, 0));
-        return Card(bar, "TonalBrush", null, 10).M(0, 0, 0, 8);
+        var bar = Cols("*,Auto,Auto", Col(1, text, T("Shift+клік — вибрати діапазон", 11, "MutedBrush")), move,
+            Btn("Скасувати", "Quiet", () => { _sel.Clear(); _anchor = null; Render(); }).M(4, 0, 0, 0));
+        var card = Card(bar, "TonalBrush", null, 10);
+        card.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 3, Opacity = 0.35, Color = Colors.Black };
+        return card.M(0, 0, 0, 2);
     }
 
     void MoveSelected(string project)
@@ -490,6 +501,21 @@ internal sealed class DayView : Grid
         return Card(Col(8, text, HRow(yes, no)), "CardHiBrush", "LimeBrush", 12).M(0, 0, 0, 8);
     }
 
+    /// <summary>
+    /// Shift+click: tick every visit between the previous tick and this one, by time — short ones folded away
+    /// included. "По програмах" keeps the range inside the program, "Хронологічно" spans all of Інше.
+    /// </summary>
+    void SelectRange(string anchorKey, TimelineItem to)
+    {
+        var from = _report.Timeline.FirstOrDefault(x => x.Key == anchorKey && !x.IsSession);
+        if (from == null) return;
+        var (a, b) = from.S <= to.S ? (from.S, to.S) : (to.S, from.S);
+        var keys = _report.Timeline
+            .Where(x => !x.IsSession && x.Moved == null && x.S >= a && x.S <= b && (_chrono || string.Equals(x.App, to.App, StringComparison.OrdinalIgnoreCase)))
+            .Select(x => x.Key);
+        _sel.UnionWith(keys);
+    }
+
     /// <summary>Tick box of a visit for the bulk move.</summary>
     UIElement Tick(TimelineItem t)
     {
@@ -503,7 +529,14 @@ internal sealed class DayView : Grid
             Child = on ? Glyph(G.Check, 10, "GreenBrush") : null, ToolTip = "Вибрати для перенесення",
         };
         var hit = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 0, 8, 0), Child = box };
-        Clickable(hit, () => { if (!_sel.Add(t.Key)) _sel.Remove(t.Key); Render(); });
+        Clickable(hit, () =>
+        {
+            if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0 && _anchor != null && _anchor != t.Key)
+                SelectRange(_anchor, t);
+            else if (!_sel.Add(t.Key)) _sel.Remove(t.Key);
+            _anchor = t.Key;
+            Render();
+        });
         return hit;
     }
 
