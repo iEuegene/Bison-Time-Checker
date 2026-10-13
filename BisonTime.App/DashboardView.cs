@@ -67,6 +67,9 @@ internal sealed class DashboardView : ContentControl
 
     public void Render()
     {
+        var focused = FocusedId();
+        if (focused != null)
+            Dispatcher.BeginInvoke(() => RestoreFocus(this, focused), System.Windows.Threading.DispatcherPriority.Loaded);
         var days = Stats.Days(_period, _day);
         var data = Load(days);
         var sum = Stats.Sum(data.Values);
@@ -159,7 +162,7 @@ internal sealed class DashboardView : ContentControl
                 CornerRadius = new CornerRadius(i == 0 ? 19 : 0, i == n - 1 ? 19 : 0, i == n - 1 ? 19 : 0, i == 0 ? 19 : 0),
                 BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(i == 0 ? 0 : 1, 0, 0, 0), Child = content,
             };
-            Clickable(seg, () => { _period = p; Render(); });
+            Clickable(seg, () => { _period = p; Render(); }, "period:" + p, title);
             row.Children.Add(seg);
         }
         return new Border { BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(20), Child = row, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
@@ -194,7 +197,7 @@ internal sealed class DashboardView : ContentControl
             }
             col.Children.Add(stack);
             var weekend = date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
-            var caption = T(_period == Period.Week ? date.ToString("ddd d", Uk) : date.Day.ToString(), 11, d == Today ? "LimeBrush" : weekend ? "FaintBrush" : "MutedBrush");
+            var caption = T(_period == Period.Week ? date.ToString("ddd d", Uk) : date.Day.ToString(), 12, d == Today ? "LimeBrush" : weekend ? "FaintBrush" : "MutedBrush");
             caption.HorizontalAlignment = HorizontalAlignment.Center;
             caption.VerticalAlignment = VerticalAlignment.Bottom;
             Grid.SetRow(caption, 1);

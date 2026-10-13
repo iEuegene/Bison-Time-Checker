@@ -15,13 +15,33 @@
         <SolidColorBrush x:Key="CardHiBrush" Color="#183D31"/>
         <SolidColorBrush x:Key="TonalBrush" Color="#2C4A3E"/>
         <SolidColorBrush x:Key="LineBrush" Color="#1D3D31"/>
-        <SolidColorBrush x:Key="EdgeBrush" Color="#3A5A4D"/>
+        <SolidColorBrush x:Key="EdgeBrush" Color="#638878"/>
         <SolidColorBrush x:Key="TextBrush" Color="#E8F0EC"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#9DB5AB"/>
-        <SolidColorBrush x:Key="FaintBrush" Color="#6F8C80"/>
+        <SolidColorBrush x:Key="FaintBrush" Color="#8BA79B"/>
         <SolidColorBrush x:Key="LimeBrush" Color="#F0FC7E"/>
         <SolidColorBrush x:Key="OrangeBrush" Color="#EF583D"/>
         <SolidColorBrush x:Key="GreenBrush" Color="#003B29"/>
+
+        <!-- Keyboard focus: a 2px lime ring outside the control (never removed). -->
+        <Style x:Key="FocusRing">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="-3" RadiusX="20" RadiusY="20" Stroke="#F0FC7E" StrokeThickness="2" SnapsToDevicePixels="True"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="FocusRingSquare">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="-2" RadiusX="8" RadiusY="8" Stroke="#F0FC7E" StrokeThickness="2" SnapsToDevicePixels="True"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- Buttons: M3 pills. Primary = filled lime, Tonal = filled green, Ghost = outlined, Quiet = text. -->
         <Style x:Key="Primary" TargetType="Button">
@@ -34,7 +54,7 @@
             <Setter Property="Padding" Value="16,8"/>
             <Setter Property="MinHeight" Value="36"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -67,7 +87,7 @@
         <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource Primary}">
             <Setter Property="Foreground" Value="#E8F0EC"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="#3A5A4D"/>
+            <Setter Property="BorderBrush" Value="#638878"/>
             <Setter Property="FontWeight" Value="Medium"/>
         </Style>
         <Style x:Key="Quiet" TargetType="Button" BasedOn="{StaticResource Primary}">
@@ -92,14 +112,14 @@
         <!-- Toggle switch: lime track + green knob when on, like BS -->
         <Style x:Key="Toggle" TargetType="CheckBox">
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
                         <Grid Width="44" Height="24" Background="Transparent">
-                            <Border x:Name="track" CornerRadius="12" Background="#13342A" BorderBrush="#6F8C80" BorderThickness="2"/>
-                            <Ellipse x:Name="knob" Width="12" Height="12" Fill="#6F8C80" HorizontalAlignment="Left" Margin="6,0,0,0"/>
+                            <Border x:Name="track" CornerRadius="12" Background="#13342A" BorderBrush="#8BA79B" BorderThickness="2"/>
+                            <Ellipse x:Name="knob" Width="12" Height="12" Fill="#8BA79B" HorizontalAlignment="Left" Margin="6,0,0,0"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
@@ -121,7 +141,7 @@
         <Style x:Key="Input" TargetType="TextBox">
             <Setter Property="Foreground" Value="#E8F0EC"/>
             <Setter Property="Background" Value="#0E281F"/>
-            <Setter Property="BorderBrush" Value="#3A5A4D"/>
+            <Setter Property="BorderBrush" Value="#638878"/>
             <Setter Property="CaretBrush" Value="#F0FC7E"/>
             <Setter Property="SelectionBrush" Value="#F0FC7E"/>
             <Setter Property="FontSize" Value="13"/>
@@ -147,7 +167,7 @@
         <Style TargetType="ContextMenu">
             <Setter Property="Background" Value="#183D31"/>
             <Setter Property="Foreground" Value="#E8F0EC"/>
-            <Setter Property="BorderBrush" Value="#3A5A4D"/>
+            <Setter Property="BorderBrush" Value="#638878"/>
             <Setter Property="FontFamily" Value="{StaticResource Text}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Template">
@@ -184,7 +204,7 @@
         <Style TargetType="ToolTip">
             <Setter Property="Background" Value="#0E281F"/>
             <Setter Property="Foreground" Value="#E8F0EC"/>
-            <Setter Property="BorderBrush" Value="#3A5A4D"/>
+            <Setter Property="BorderBrush" Value="#638878"/>
         </Style>
 
         <!-- Slim scrollbar -->

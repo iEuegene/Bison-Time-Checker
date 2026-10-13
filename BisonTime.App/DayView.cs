@@ -61,9 +61,15 @@ internal sealed class DayView : Grid
         Children.Add(_scroll);
 
         _refresh = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        _refresh.Tick += (_, _) => { if (IsVisible && !EditingText) Refresh(); };
+        _refresh.Tick += (_, _) => { if (IsVisible && !EditingText) Refresh(background: true); };
         _refresh.Start();
-        App.Tracker.Changed += () => Dispatcher.BeginInvoke(() => { if (IsVisible && !EditingText) Refresh(); });
+        App.Tracker.Changed += () => Dispatcher.BeginInvoke(() => { if (IsVisible && !EditingText) Refresh(background: true); });
+        // A refresh held back while the user was busy in the list runs once the pointer leaves it.
+        _scroll.MouseLeave += (_, _) => { if (_pending && !Busy) { _pending = false; Render(); } };
+        Loaded += (_, _) =>
+        {
+            if (Window.GetWindow(this) is { } w) w.PreviewKeyDown += OnKey;
+        };
         App.Instance.UpdateChanged += () => Dispatcher.BeginInvoke(() => { if (IsVisible) Refresh(); });
         IsVisibleChanged += (_, _) => { if (IsVisible) Refresh(); };
     }
@@ -115,6 +121,37 @@ internal sealed class DayView : Grid
             try { Stats.Save(App.Store, _day, _report); } catch { /* stats are a convenience */ }
     }
 
+    bool _pending;
+    int _limit = 150;   // visits drawn per list before "Показати ще": keeps a long day responsive
+
+    /// <summary>The user is in the middle of something in the list: a menu, ticks, or the pointer over it.</summary>
+    bool Busy => Ui.MenuOpen || _sel.Count > 0 || _scroll.IsMouseOver;
+
+    /// <summary>Background refresh (timer, window switch): data and header always, the list only when not busy.</summary>
+    void Refresh(bool background)
+    {
+        if (!background) { Refresh(); return; }
+        Load();
+        if (Busy) { RenderHead(); _pending = true; return; }
+        Render();
+    }
+
+    void OnKey(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (!IsVisible || System.Windows.Input.Keyboard.FocusedElement is TextBox) return;
+        var mods = System.Windows.Input.Keyboard.Modifiers;
+        if (e.Key == System.Windows.Input.Key.C && mods == (System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift))
+        {
+            CopyReportText();
+            e.Handled = true;
+        }
+        else if (mods == System.Windows.Input.ModifierKeys.Alt && e.SystemKey is System.Windows.Input.Key.Left or System.Windows.Input.Key.Right)
+        {
+            Go(e.SystemKey == System.Windows.Input.Key.Left ? -1 : 1);
+            e.Handled = true;
+        }
+    }
+
     public void Refresh()
     {
         Load();
@@ -160,9 +197,9 @@ internal sealed class DayView : Grid
     void RenderHead()
     {
         _head.Children.Clear();
-        var prev = IconBtn(G.Left, () => Go(-1), "Попередній день", 13);
+        var prev = IconBtn(G.Left, () => Go(-1), "Попередній день (Alt+←)", 13);
         prev.IsEnabled = string.CompareOrdinal(_day, TimeUtil.ShiftDay(Today, -(Tracker.KeepSegmentsDays - 1))) > 0;
-        var next = IconBtn(G.Right, () => Go(1), "Наступний день", 13);
+        var next = IconBtn(G.Right, () => Go(1), "Наступний день (Alt+→)", 13);
         next.IsEnabled = string.CompareOrdinal(_day, Today) < 0;
         var label = T(DayLabel(), 14, "MutedBrush", FontWeights.Medium);
         label.MinWidth = 70;
@@ -217,6 +254,8 @@ internal sealed class DayView : Grid
 
     void Render()
     {
+        _pending = false;
+        var focused = FocusedId();
         RenderHead();
         // Under the header, outside the scroll: stays in view however far down the ticks are.
         _sticky.Children.Clear();
@@ -238,6 +277,8 @@ internal sealed class DayView : Grid
         if (_report.Projects.Any(p => p.Rounded > 0))
             Add(HRow(CopyReport()));
         _scroll.ScrollToVerticalOffset(offset);
+        if (focused != null)
+            Dispatcher.BeginInvoke(() => RestoreFocus(this, focused), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     UIElement? UpdateBar()
@@ -290,7 +331,7 @@ internal sealed class DayView : Grid
         var head = Cols("Auto,*,Auto", Avatar(p.Name, p.Name == _current),
             Col(1, T(p.Name, 14, weight: FontWeights.SemiBold), subText).M(12, 0, 8, 0), time);
         var headBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(10, 10, 10, 10), Child = head };
-        Clickable(headBox, () => { if (!_open.Add(p.Name)) _open.Remove(p.Name); Render(); });
+        Clickable(headBox, () => { if (!_open.Add(p.Name)) _open.Remove(p.Name); Render(); }, "proj:" + p.Name, $"{p.Name}, {TimeUtil.FormatReport(p.Rounded)}");
 
         var box = new StackPanel();
         box.Children.Add(headBox);
@@ -299,7 +340,7 @@ internal sealed class DayView : Grid
             var detail = new StackPanel { Margin = new Thickness(58, 0, 12, 12) };
             foreach (var g in p.Groups)
             {
-                detail.Children.Add(T(g.Title, 11.5, "FaintBrush", FontWeights.SemiBold).M(0, 6, 0, 2));
+                detail.Children.Add(T(g.Title, 12, "FaintBrush", FontWeights.SemiBold).M(0, 6, 0, 2));
                 foreach (var r in g.Rows) detail.Children.Add(RowEl(r));
             }
             detail.Children.Add(Cols("*,Auto",
@@ -324,13 +365,13 @@ internal sealed class DayView : Grid
         var label = T(r.Label, 13, r.Disabled ? "FaintBrush" : "TextBrush");
         if (r.Disabled) label.TextDecorations = TextDecorations.Strikethrough;
         var sub = r.Task != "" ? r.Task : (r.Group is "apps" or "linked" or "ctx" ? r.App : "");
-        var what = sub == "" ? (UIElement)label : Col(1, label, T(sub, 11.5, "FaintBrush"));
+        var what = sub == "" ? (UIElement)label : Col(1, label, T(sub, 12, "FaintBrush"));
         var dur = T(TimeUtil.FormatExact(r.Ms), 12.5, r.Disabled ? "FaintBrush" : "MutedBrush");
         var key = r.Key;
         var sw = Toggle(!r.Disabled, on => UpdateDay(st => { if (on) st.Disabled.Remove(key); else st.Disabled[key] = true; }),
             r.Disabled ? "Не враховується" : "Враховується");
         var whatBox = new Border { Background = Brushes.Transparent, Child = what, ToolTip = r.Pieces.Count > 0 ? "Клік — коли саме" : null };
-        if (r.Pieces.Count > 0) Clickable(whatBox, () => { _openRow = _openRow == key ? null : key; Render(); });
+        if (r.Pieces.Count > 0) Clickable(whatBox, () => { _openRow = _openRow == key ? null : key; Render(); }, "row:" + key, r.Label);
         var line = Cols("*,Auto,Auto", whatBox, dur.M(8, 0, 12, 0), sw).M(0, 5, 0, 5);
         if (_openRow != key || r.Pieces.Count == 0) return line;
 
@@ -384,12 +425,17 @@ internal sealed class DayView : Grid
         Button? b = null;
         b = IconText(G.Copy, "Копіювати звіт", "Primary", () =>
         {
-            var lines = _report.Projects.Where(p => p.Rounded > 0).Select(p =>
-                $"{p.Name} — {TimeUtil.FormatReport(p.Rounded)}" + (string.IsNullOrWhiteSpace(p.Comment.Text) ? "" : $" — {p.Comment.Text.Trim()}"));
-            try { Clipboard.SetText(string.Join(Environment.NewLine, lines)); } catch { return; }
+            if (!CopyReportText()) return;
             b!.Content = HRow(Glyph(G.Check, 14, "GreenBrush"), new TextBlock { Text = "Скопійовано", FontFamily = TextFont, Margin = new Thickness(8, 0, 0, 0) });
-        }, "Проєкти, час і коментарі — одним текстом");
+        }, "Проєкти, час і коментарі — одним текстом (Ctrl+Shift+C)");
         return b;
+    }
+
+    bool CopyReportText()
+    {
+        var lines = _report.Projects.Where(p => p.Rounded > 0).Select(p =>
+            $"{p.Name} — {TimeUtil.FormatReport(p.Rounded)}" + (string.IsNullOrWhiteSpace(p.Comment.Text) ? "" : $" — {p.Comment.Text.Trim()}"));
+        try { Clipboard.SetText(string.Join(Environment.NewLine, lines)); return true; } catch { return false; }
     }
 
     UIElement? OffLine()
@@ -413,7 +459,7 @@ internal sealed class DayView : Grid
             T(TimeUtil.FormatExact(_report.OtherMs), 13, "MutedBrush", FontWeights.Medium).M(8, 0, 6, 0),
             Glyph(_otherOpen ? G.Up : G.Down, 11, "FaintBrush"));
         var headBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(14, 12, 14, 12), Child = head };
-        Clickable(headBox, () => { _otherOpen = !_otherOpen; Render(); });
+        Clickable(headBox, () => { _otherOpen = !_otherOpen; Render(); }, "other", "Інше");
         var panel = new StackPanel();
         panel.Children.Add(headBox);
         if (_otherOpen)
@@ -423,7 +469,7 @@ internal sealed class DayView : Grid
             if (_chrono) Chronology(list);
             else
             {
-                list.Children.Add(T("Найбільше часу зверху. У звіт не йде, поки не перенесеш у проєкт.", 11.5, "FaintBrush", wrap: true).M(0, 0, 0, 6));
+                list.Children.Add(T("Найбільше часу зверху. У звіт не йде, поки не перенесеш у проєкт.", 12, "FaintBrush", wrap: true).M(0, 0, 0, 6));
                 foreach (var a in _report.OtherApps) list.Children.Add(OtherAppEl(a));
             }
             panel.Children.Add(list);
@@ -448,7 +494,7 @@ internal sealed class DayView : Grid
                 BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(first ? 0 : 1, 0, 0, 0),
                 Child = T(text, 12.5, on ? "LimeBrush" : "MutedBrush", FontWeights.Medium),
             };
-            Clickable(b, click);
+            Clickable(b, click, "mode:" + text, text);
             return b;
         }
         var row = HRow(
@@ -469,7 +515,7 @@ internal sealed class DayView : Grid
         var ms = sel.Sum(t => t.Ms);
         var move = Picker("→ Проєкт", "Primary", ProjectNames(), MoveSelected, "Перенести всі вибрані записи в проєкт");
         var text = T($"Вибрано {sel.Count} · {TimeUtil.FormatExact(ms)}", 13, weight: FontWeights.SemiBold);
-        var bar = Cols("*,Auto,Auto", Col(1, text, T("Shift+клік — вибрати діапазон", 11, "MutedBrush")), move,
+        var bar = Cols("*,Auto,Auto", Col(1, text, T("Shift+клік — вибрати діапазон", 12, "MutedBrush")), move,
             Btn("Скасувати", "Quiet", () => { _sel.Clear(); _anchor = null; Render(); }).M(4, 0, 0, 0));
         var card = Card(bar, "TonalBrush", null, 10);
         card.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 3, Opacity = 0.35, Color = Colors.Black };
@@ -519,7 +565,7 @@ internal sealed class DayView : Grid
     /// <summary>Tick box of a visit for the bulk move.</summary>
     UIElement Tick(TimelineItem t)
     {
-        if (t.Moved != null) return new Border { Width = 18 };
+        if (t.Moved != null) return new Border { Width = 28 };
         var on = _sel.Contains(t.Key);
         var box = new Border
         {
@@ -528,7 +574,7 @@ internal sealed class DayView : Grid
             Background = on ? B("LimeBrush") : Brushes.Transparent,
             Child = on ? Glyph(G.Check, 10, "GreenBrush") : null, ToolTip = "Вибрати для перенесення",
         };
-        var hit = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 0, 8, 0), Child = box };
+        var hit = new Border { Background = Brushes.Transparent, Padding = new Thickness(4, 8, 8, 8), Child = box };   // 28×32 target
         Clickable(hit, () =>
         {
             if ((System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0 && _anchor != null && _anchor != t.Key)
@@ -536,7 +582,7 @@ internal sealed class DayView : Grid
             else if (!_sel.Add(t.Key)) _sel.Remove(t.Key);
             _anchor = t.Key;
             Render();
-        });
+        }, "tick:" + t.Key, "Вибрати: " + t.Label);
         return hit;
     }
 
@@ -556,13 +602,15 @@ internal sealed class DayView : Grid
             }
             visible.Add(t);
         }
+        var drawn = 0;
         foreach (var t in visible)
         {
+            if (drawn++ == _limit) { list.Children.Add(MoreButton()); break; }
             if (t.IsSession)
             {
                 var name = HRow(new Ellipse { Width = 6, Height = 6, Fill = B("LimeBrush"), VerticalAlignment = VerticalAlignment.Center },
-                    T(t.Project ?? "", 12.5, "LimeBrush", FontWeights.Medium).M(8, 0, 0, 0), T("  у проєкті", 11.5, "FaintBrush"));
-                list.Children.Add(Cols("24,42,*,Auto", null, T(TimeUtil.Clock(t.S), 12, "FaintBrush"), name, T($"до {TimeUtil.Clock(t.E)}", 12, "FaintBrush")).M(0, 4, 0, 4));
+                    T(t.Project ?? "", 12.5, "LimeBrush", FontWeights.Medium).M(8, 0, 0, 0), T("  у проєкті", 12, "FaintBrush"));
+                list.Children.Add(Cols("28,42,*,Auto", null, T(TimeUtil.Clock(t.S), 12, "FaintBrush"), name, T($"до {TimeUtil.Clock(t.E)}", 12, "FaintBrush")).M(0, 4, 0, 4));
             }
             else list.Children.Add(VisitRow(t, showApp: true));
         }
@@ -570,17 +618,19 @@ internal sealed class DayView : Grid
             list.Children.Add(HRow(Btn(_showShort ? "сховати короткі" : $"ще {hidden} коротких (<1 хв)", "Quiet", () => { _showShort = !_showShort; Render(); })).M(0, 4, 0, 0));
     }
 
+    UIElement MoreButton() => HRow(Btn("Показати ще", "Tonal", () => { _limit += 300; Render(); }, "Довгий список малюється частинами, щоб вікно не гальмувало")).M(0, 6, 0, 6);
+
     UIElement OtherAppEl(OtherApp a)
     {
         var open = _openApps.Contains(a.Name);
         var count = a.Visits.Count;
         var head = Cols("*,Auto,Auto,22",
             T(a.Name, 13, a.Ms > 0 ? "TextBrush" : "MutedBrush", FontWeights.Medium),
-            T($"{count} {Plural(count, "запис", "записи", "записів")}", 11.5, "FaintBrush").M(8, 0, 10, 0),
+            T($"{count} {Plural(count, "запис", "записи", "записів")}", 12, "FaintBrush").M(8, 0, 10, 0),
             T(TimeUtil.FormatExact(a.Ms), 12.5, a.Ms > 0 ? "LimeBrush" : "FaintBrush", FontWeights.SemiBold),
             Glyph(open ? G.Up : G.Down, 10, "FaintBrush"));
         var headBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 8, 0, 8), Child = head };
-        Clickable(headBox, () => { if (!_openApps.Add(a.Name)) _openApps.Remove(a.Name); Render(); });
+        Clickable(headBox, () => { if (!_openApps.Add(a.Name)) _openApps.Remove(a.Name); Render(); }, "app:" + a.Name, $"{a.Name}, {TimeUtil.FormatExact(a.Ms)}");
 
         var box = new StackPanel();
         box.Children.Add(headBox);
@@ -588,9 +638,11 @@ internal sealed class DayView : Grid
         {
             var hidden = 0;
             var list = new StackPanel { Margin = new Thickness(8, 0, 0, 6) };
+            var drawn = 0;
             foreach (var t in a.Visits)
             {
                 if (t.Moved == null && t.Ms < TimeUtil.Min && !_showShort) { hidden++; continue; }
+                if (drawn++ == _limit) { list.Children.Add(MoreButton()); break; }
                 list.Children.Add(VisitRow(t));
             }
             var foot = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
@@ -625,14 +677,14 @@ internal sealed class DayView : Grid
         label.ToolTip = t.Label;
         var dur = t.Moved != null ? T($"→ {t.Moved}", 12, "LimeBrush") : T(TimeUtil.FormatExact(t.Ms), 12, "MutedBrush");
         var line = Cols("42,*,Auto", T(TimeUtil.Clock(t.S), 12, "FaintBrush"), label, dur.M(8, 0, 0, 0));
-        var lineBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 4, 0, 4), Child = line };
-        Clickable(lineBox, () => { _openVisit = _openVisit == t.Key ? null : t.Key; Render(); });
+        var lineBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 7, 0, 7), Child = line };   // 32 px rows
+        Clickable(lineBox, () => { _openVisit = _openVisit == t.Key ? null : t.Key; Render(); }, "visit:" + t.Key, t.Label);
 
         var col = new StackPanel();
         col.Children.Add(Cols("Auto,*", Tick(t), lineBox));
         if (_openVisit == t.Key)
         {
-            var acts = new WrapPanel { Margin = new Thickness(66, 2, 0, 6) };
+            var acts = new WrapPanel { Margin = new Thickness(70, 2, 0, 6) };
             if (t.Moved != null)
                 acts.Children.Add(Btn("скасувати перенесення", "Quiet", () => UpdateDay(st => st.Moved.Remove(t.Key))));
             else

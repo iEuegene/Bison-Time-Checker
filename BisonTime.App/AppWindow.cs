@@ -41,10 +41,12 @@ internal sealed class AppWindow : Window
     public AppWindow()
     {
         Title = "Bison Time Checker";
-        Width = 1120;
-        Height = 780;
-        MinWidth = 900;
-        MinHeight = 560;
+        // Fit the work area: a 1080p laptop at 150% leaves ~1280×680 above the taskbar.
+        var area = SystemParameters.WorkArea;
+        Width = Math.Min(1120, area.Width - 40);
+        Height = Math.Min(780, area.Height - 40);
+        MinWidth = Math.Min(900, area.Width - 40);
+        MinHeight = Math.Min(560, area.Height - 40);
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = B("BgBrush");
         Foreground = B("TextBrush");
@@ -68,6 +70,14 @@ internal sealed class AppWindow : Window
         Content = Cols("96,*", railBox, _host);
         App.Instance.UpdateChanged += OnUpdateChanged;
         Closed += (_, _) => { _update?.Detach(); App.Instance.UpdateChanged -= OnUpdateChanged; };
+        // Ctrl+1…7 jumps between rail pages, in rail order.
+        PreviewKeyDown += (_, e) =>
+        {
+            if (System.Windows.Input.Keyboard.Modifiers != System.Windows.Input.ModifierKeys.Control) return;
+            var n = e.Key - System.Windows.Input.Key.D1;
+            var all = Rail.Concat(RailBottom).ToArray();
+            if (n >= 0 && n < all.Length) { _tab = all[n].Page; Render(); e.Handled = true; }
+        };
         Render();
     }
 
@@ -118,7 +128,9 @@ internal sealed class AppWindow : Window
             box.MouseEnter += (_, _) => ((Border)pill.Children[0]).Background = B("CardHiBrush");
             box.MouseLeave += (_, _) => ((Border)pill.Children[0]).Background = Brushes.Transparent;
         }
-        Clickable(box, () => { _tab = it.Page; Render(); });
+        var index = Array.FindIndex(Rail.Concat(RailBottom).ToArray(), x => x.Page == it.Page) + 1;
+        box.ToolTip = $"{it.Title} (Ctrl+{index})";
+        Clickable(box, () => { _tab = it.Page; Render(); }, "rail:" + it.Page, it.Title);
         return box;
     }
 
@@ -132,6 +144,9 @@ internal sealed class AppWindow : Window
 
     void Render()
     {
+        var focused = FocusedId();
+        if (focused != null)
+            Dispatcher.BeginInvoke(() => RestoreFocus(this, focused), System.Windows.Threading.DispatcherPriority.Loaded);
         _s = App.Store.LoadSettings();
         RenderRail();
         Title = "Bison Time Checker — " + Rail.Concat(RailBottom).First(x => x.Page == _tab).Title;
@@ -253,7 +268,7 @@ internal sealed class AppWindow : Window
     static Border TagChip(string text, string bg, string fg) => new()
     {
         Background = B(bg), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1), Margin = new Thickness(8, 0, 0, 0),
-        Child = T(text, 11, fg, FontWeights.SemiBold), VerticalAlignment = VerticalAlignment.Center,
+        Child = T(text, 12, fg, FontWeights.SemiBold), VerticalAlignment = VerticalAlignment.Center,
     };
 
     void RulesPage()

@@ -27,6 +27,8 @@ internal static class Ui
             FontFamily = display ? Display : TextFont,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        // Tabular digits: times in a column line up ("1 год 05 хв" over "<1 хв").
+        Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
         if (wrap) t.TextWrapping = TextWrapping.Wrap;
         else if (ellipsis) t.TextTrimming = TextTrimming.CharacterEllipsis;
         if (!wrap && ellipsis) t.ToolTip = text.Length > 30 ? text : null;
@@ -105,8 +107,12 @@ internal static class Ui
     }
 
     /// <summary>Round icon-only button (M3 standard icon button).</summary>
-    public static Button IconBtn(string glyph, Action onClick, string? tip = null, double size = 16) =>
-        Btn(Glyph(glyph, size), "Icon", onClick, tip);
+    public static Button IconBtn(string glyph, Action onClick, string? tip = null, double size = 16)
+    {
+        var b = Btn(Glyph(glyph, size), "Icon", onClick, tip);
+        if (tip != null) System.Windows.Automation.AutomationProperties.SetName(b, tip);   // screen readers
+        return b;
+    }
 
     /// <summary>Button with a leading icon and a label.</summary>
     public static Button IconText(string glyph, string text, string style, Action onClick, string? tip = null)
@@ -227,14 +233,54 @@ internal static class Ui
                 menu.Items.Add(mi);
             }
             if (menu.Items.Count == 0) menu.Items.Add(new MenuItem { Header = "Немає проєктів", IsEnabled = false });
+            menu.Opened += (_, _) => MenuOpen = true;
+            menu.Closed += (_, _) => MenuOpen = false;
             menu.IsOpen = true;
         }, tip);
         return b;
     }
 
-    public static void Clickable(UIElement el, Action onClick)
+    /// <summary>
+    /// Mouse click, and keyboard too: the element takes Tab focus with the lime ring and runs on Enter or Space.
+    /// <paramref name="id"/> lets a view put focus back on "the same" element after it rebuilds.
+    /// </summary>
+    public static void Clickable(UIElement el, Action onClick, string? id = null, string? name = null)
     {
-        if (el is FrameworkElement fe) fe.Cursor = Cursors.Hand;
+        if (el is FrameworkElement fe)
+        {
+            fe.Cursor = Cursors.Hand;
+            fe.Focusable = true;
+            fe.FocusVisualStyle = (Style)Application.Current.FindResource("FocusRingSquare");
+            if (id != null) fe.Uid = id;
+            if (name != null) System.Windows.Automation.AutomationProperties.SetName(fe, name);
+        }
         el.MouseLeftButtonUp += (_, e) => { onClick(); e.Handled = true; };
+        el.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Space && Keyboard.FocusedElement == el) { onClick(); e.Handled = true; }
+        };
     }
+
+    /// <summary>After a rebuild, focus the element that has the same id as the one focused before (keyboard users keep their place).</summary>
+    public static void RestoreFocus(DependencyObject root, string? id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        var found = Find(root, id);
+        found?.Focus();
+        static UIElement? Find(DependencyObject d, string id)
+        {
+            if (d is UIElement u && d is FrameworkElement f && f.Uid == id) return u;
+            var n = VisualTreeHelper.GetChildrenCount(d);
+            for (var i = 0; i < n; i++)
+                if (Find(VisualTreeHelper.GetChild(d, i), id) is { } r) return r;
+            if (d is ContentControl { Content: DependencyObject c } && VisualTreeHelper.GetChildrenCount(d) == 0) return Find(c, id);
+            return null;
+        }
+    }
+
+    /// <summary>The Uid of whatever has keyboard focus now (empty when it has none).</summary>
+    public static string? FocusedId() => (Keyboard.FocusedElement as FrameworkElement)?.Uid is { Length: > 0 } u ? u : null;
+
+    /// <summary>True while one of our project menus is open: views hold off rebuilding under it.</summary>
+    public static bool MenuOpen { get; private set; }
 }
