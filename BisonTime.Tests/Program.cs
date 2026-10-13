@@ -467,6 +467,16 @@ Test("tracker: resume right after finishing", () =>
     tr.Shutdown();
     True(!tr.Done, "resumed"); Eq(2, st.DaysMap[day].Segments.Count);
 });
+Test("bulk move suggests the shared site name as a rule", () =>
+{
+    Eq("Coffee Shop", Classifier.CommonFragment(new[]
+    {
+        "Харчові інгредієнти та інвентар | Coffee Shop", "Купити топери на торт — стильні | Coffee Shop",
+        "Головна | Coffee Shop", "Перевірка розширених результатів – Google Search Console",
+    }));
+    Eq(null, Classifier.CommonFragment(new[] { "Новини дня", "Погода | Синоптик" }));
+    Eq(null, Classifier.CommonFragment(new[] { "Головна | Coffee Shop" }));
+});
 Test("browser tabs map to services", () =>
 {
     var s = S("shop.com.ua");

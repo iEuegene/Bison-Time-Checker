@@ -99,6 +99,25 @@ public static class Classifier
     /// <summary>A call is on screen: listening without touching the mouse is not idle.</summary>
     public static bool IsCall(WindowInfo w) => CallApps.Contains(w.Proc) || CallTitle.IsMatch(w.Title ?? "");
 
+    static readonly Regex TitleParts = new(@"\s+[|–—-]\s+|\s*\|\s*", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The site or brand most of these titles share ("… | Caffitalia"), to offer it as a rule after a bulk move.
+    /// Null when nothing is shared by at least half of them (and by two).
+    /// </summary>
+    public static string? CommonFragment(IEnumerable<string> titles)
+    {
+        var list = titles.ToList();
+        if (list.Count < 2) return null;
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in list)
+            foreach (var part in TitleParts.Split(t).Select(x => x.Trim()).Where(x => x.Length is >= 3 and <= 40).Distinct(StringComparer.OrdinalIgnoreCase))
+                counts[part] = (counts.TryGetValue(part, out var n) ? n : 0) + 1;
+        var best = counts.Where(x => x.Value >= 2 && x.Value * 2 >= list.Count)
+            .OrderByDescending(x => x.Value).ThenBy(x => x.Key.Length).Select(x => x.Key).FirstOrDefault();
+        return best;
+    }
+
     public const string ProjectSites = "Сайти й задачі проєктів";
     public const string OtherTabs = "Інші вкладки";
 

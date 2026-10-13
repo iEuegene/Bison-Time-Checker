@@ -19,6 +19,8 @@ internal sealed class DayView : Grid
     readonly HashSet<string> _open = new();
     bool _otherOpen, _showShort, _chrono;
     string? _openRow;
+    readonly HashSet<string> _sel = new();                 // visits of Інше picked for a bulk move
+    (string Fragment, string Project)? _ruleHint;            // offered after a bulk move
     readonly HashSet<string> _openApps = new(StringComparer.OrdinalIgnoreCase);
     string? _openVisit;
     readonly StackPanel _head = new();
@@ -69,6 +71,8 @@ internal sealed class DayView : Grid
         _open.Clear();
         _openApps.Clear();
         _openVisit = null;
+        _sel.Clear();
+        _ruleHint = null;
         Load();
         if (_current != null) _open.Add(_current);
         Render();
@@ -83,6 +87,8 @@ internal sealed class DayView : Grid
         _open.Clear();
         _openApps.Clear();
         _openVisit = null;
+        _sel.Clear();
+        _ruleHint = null;
         Refresh();
     }
 
@@ -404,6 +410,8 @@ internal sealed class DayView : Grid
         {
             var list = new StackPanel { Margin = new Thickness(14, 0, 14, 10) };
             list.Children.Add(ModeSwitch().M(0, 0, 0, 8));
+            if (RuleHint() is { } hint) list.Children.Add(hint);
+            if (SelectionBar() is { } bar) list.Children.Add(bar);
             if (_chrono) Chronology(list);
             else
             {
@@ -424,9 +432,11 @@ internal sealed class DayView : Grid
     {
         Border Seg(string text, bool on, bool first, Action click)
         {
+            // WPF does not clip children to a rounded parent: the segment rounds its own outer corners.
             var b = new Border
             {
                 Background = on ? B("TonalBrush") : Brushes.Transparent, Padding = new Thickness(12, 5, 12, 5),
+                CornerRadius = first ? new CornerRadius(15, 0, 0, 15) : new CornerRadius(0, 15, 15, 0),
                 BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(first ? 0 : 1, 0, 0, 0),
                 Child = T(text, 12.5, on ? "LimeBrush" : "MutedBrush", FontWeights.Medium),
             };
@@ -437,6 +447,64 @@ internal sealed class DayView : Grid
             Seg("По програмах", !_chrono, true, () => { _chrono = false; Render(); }),
             Seg("Хронологічно", _chrono, false, () => { _chrono = true; Render(); }));
         return new Border { BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(16), Child = row, HorizontalAlignment = HorizontalAlignment.Left };
+    }
+
+    // ---------------- bulk move ----------------
+
+    List<TimelineItem> Selected() => _report.Timeline.Where(t => !t.IsSession && t.Moved == null && _sel.Contains(t.Key)).ToList();
+
+    /// <summary>"Вибрано 18 · 6 хв  [→ Проєкт]  [Скасувати]" while anything is ticked.</summary>
+    UIElement? SelectionBar()
+    {
+        var sel = Selected();
+        if (sel.Count == 0) { _sel.Clear(); return null; }
+        var ms = sel.Sum(t => t.Ms);
+        var move = Picker("→ Проєкт", "Primary", ProjectNames(), MoveSelected, "Перенести всі вибрані записи в проєкт");
+        var text = T($"Вибрано {sel.Count} · {TimeUtil.FormatExact(ms)}", 13, weight: FontWeights.SemiBold);
+        var bar = Cols("*,Auto,Auto", text, move, Btn("Скасувати", "Quiet", () => { _sel.Clear(); Render(); }).M(4, 0, 0, 0));
+        return Card(bar, "TonalBrush", null, 10).M(0, 0, 0, 8);
+    }
+
+    void MoveSelected(string project)
+    {
+        var sel = Selected();
+        var fragment = Classifier.CommonFragment(sel.Select(t => t.Label));
+        UpdateDay(st => { foreach (var t in sel) st.Moved[t.Key] = project; });
+        _sel.Clear();
+        // Offer to make it automatic, unless a rule like that already exists.
+        _ruleHint = fragment != null && !_settings.Rules.Any(r => string.Equals(r.Match, fragment, StringComparison.OrdinalIgnoreCase))
+            ? (fragment, project) : null;
+        Render();
+    }
+
+    UIElement? RuleHint()
+    {
+        if (_ruleHint is not { } h) return null;
+        var text = T($"У заголовках було «{h.Fragment}». Завжди відносити такі вікна до {h.Project}?", 12.5, wrap: true);
+        var yes = Btn("Створити правило", "Primary", () =>
+        {
+            _ruleHint = null;
+            UpdateSettings(s => s.Rules.Add(new Rule { Match = h.Fragment, Project = h.Project }));
+        });
+        var no = Btn("Ні", "Quiet", () => { _ruleHint = null; Render(); }).M(4, 0, 0, 0);
+        return Card(Col(8, text, HRow(yes, no)), "CardHiBrush", "LimeBrush", 12).M(0, 0, 0, 8);
+    }
+
+    /// <summary>Tick box of a visit for the bulk move.</summary>
+    UIElement Tick(TimelineItem t)
+    {
+        if (t.Moved != null) return new Border { Width = 18 };
+        var on = _sel.Contains(t.Key);
+        var box = new Border
+        {
+            Width = 16, Height = 16, CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Center,
+            BorderBrush = B(on ? "LimeBrush" : "EdgeBrush"), BorderThickness = new Thickness(on ? 0 : 1.5),
+            Background = on ? B("LimeBrush") : Brushes.Transparent,
+            Child = on ? Glyph(G.Check, 10, "GreenBrush") : null, ToolTip = "Вибрати для перенесення",
+        };
+        var hit = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 0, 8, 0), Child = box };
+        Clickable(hit, () => { if (!_sel.Add(t.Key)) _sel.Remove(t.Key); Render(); });
+        return hit;
     }
 
     /// <summary>The day in order: visits to Інше between stretches of project work.</summary>
@@ -461,7 +529,7 @@ internal sealed class DayView : Grid
             {
                 var name = HRow(new Ellipse { Width = 6, Height = 6, Fill = B("LimeBrush"), VerticalAlignment = VerticalAlignment.Center },
                     T(t.Project ?? "", 12.5, "LimeBrush", FontWeights.Medium).M(8, 0, 0, 0), T("  у проєкті", 11.5, "FaintBrush"));
-                list.Children.Add(Cols("42,*,Auto", T(TimeUtil.Clock(t.S), 12, "FaintBrush"), name, T($"до {TimeUtil.Clock(t.E)}", 12, "FaintBrush")).M(0, 4, 0, 4));
+                list.Children.Add(Cols("24,42,*,Auto", null, T(TimeUtil.Clock(t.S), 12, "FaintBrush"), name, T($"до {TimeUtil.Clock(t.E)}", 12, "FaintBrush")).M(0, 4, 0, 4));
             }
             else list.Children.Add(VisitRow(t, showApp: true));
         }
@@ -493,6 +561,16 @@ internal sealed class DayView : Grid
                 list.Children.Add(VisitRow(t));
             }
             var foot = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var free = a.Visits.Where(t => t.Moved == null).Select(t => t.Key).ToList();
+            if (free.Count > 1)
+            {
+                var all = free.All(_sel.Contains);
+                foot.Children.Add(Btn(all ? "Зняти вибір" : $"Вибрати всі {free.Count}", "Tonal", () =>
+                {
+                    if (all) _sel.ExceptWith(free); else _sel.UnionWith(free);
+                    Render();
+                }, "Разом з короткими: потім «→ Проєкт» угорі"));
+            }
             if (hidden > 0 || _showShort)
                 foot.Children.Add(Btn(_showShort ? "сховати короткі" : $"ще {hidden} коротких (<1 хв)", "Quiet", () => { _showShort = !_showShort; Render(); }));
             if (!a.Browser)
@@ -518,10 +596,10 @@ internal sealed class DayView : Grid
         Clickable(lineBox, () => { _openVisit = _openVisit == t.Key ? null : t.Key; Render(); });
 
         var col = new StackPanel();
-        col.Children.Add(lineBox);
+        col.Children.Add(Cols("Auto,*", Tick(t), lineBox));
         if (_openVisit == t.Key)
         {
-            var acts = new WrapPanel { Margin = new Thickness(42, 2, 0, 6) };
+            var acts = new WrapPanel { Margin = new Thickness(66, 2, 0, 6) };
             if (t.Moved != null)
                 acts.Children.Add(Btn("скасувати перенесення", "Quiet", () => UpdateDay(st => st.Moved.Remove(t.Key))));
             else

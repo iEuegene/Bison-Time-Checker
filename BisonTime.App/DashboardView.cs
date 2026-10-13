@@ -151,9 +151,12 @@ internal sealed class DashboardView : ContentControl
             var (p, title) = items[i];
             var on = p == _period;
             var content = HRow(on ? Glyph(G.Check, 12, "LimeBrush").M(0, 0, 6, 0) : null, T(title, 13.5, on ? "LimeBrush" : "TextBrush", FontWeights.Medium));
+            var n = items.Count();
             var seg = new Border
             {
                 Background = on ? B("TonalBrush") : Brushes.Transparent, Padding = new Thickness(16, 8, 16, 8),
+                // WPF does not clip to the rounded group: end segments round their own outer corners.
+                CornerRadius = new CornerRadius(i == 0 ? 19 : 0, i == n - 1 ? 19 : 0, i == n - 1 ? 19 : 0, i == 0 ? 19 : 0),
                 BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(i == 0 ? 0 : 1, 0, 0, 0), Child = content,
             };
             Clickable(seg, () => { _period = p; Render(); });
