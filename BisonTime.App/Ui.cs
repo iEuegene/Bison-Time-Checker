@@ -28,7 +28,7 @@ internal static class Ui
             VerticalAlignment = VerticalAlignment.Center,
         };
         // Tabular digits: times in a column line up ("1 год 05 хв" over "<1 хв").
-        Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        System.Windows.Documents.Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
         if (wrap) t.TextWrapping = TextWrapping.Wrap;
         else if (ellipsis) t.TextTrimming = TextTrimming.CharacterEllipsis;
         if (!wrap && ellipsis) t.ToolTip = text.Length > 30 ? text : null;
