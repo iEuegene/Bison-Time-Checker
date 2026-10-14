@@ -423,6 +423,23 @@ Test("updates: only changed or missing files are downloaded; swap and rollback",
     Eq("new", File.ReadAllText(Path.Combine(app, "b.dll")));
     foreach (var d in new[] { app, next }) Directory.Delete(d, true);
 });
+Test("updates: language folders the release dropped are removed, nothing else", () =>
+{
+    var dir = Path.Combine(Path.GetTempPath(), "bt-lang-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(Path.Combine(dir, "de"));
+    File.WriteAllText(Path.Combine(dir, "de", "PresentationCore.resources.dll"), "x");
+    Directory.CreateDirectory(Path.Combine(dir, "fr"));
+    File.WriteAllText(Path.Combine(dir, "fr", "notes.txt"), "mine");              // not only resources: kept
+    Directory.CreateDirectory(Path.Combine(dir, "pl"));
+    File.WriteAllText(Path.Combine(dir, "pl", "X.resources.dll"), "x");             // still shipped: kept
+    Directory.CreateDirectory(Path.Combine(dir, "Fonts"));
+    File.WriteAllText(Path.Combine(dir, "Fonts", "A.resources.dll"), "x");          // not a culture name: kept
+    var m = new UpdateManifest { Version = "2.0.0", Files = { new UpdateFile { Path = "pl/X.resources.dll", Size = 1, Sha256 = new string('0', 64) } } };
+    Eq(1, Updates.RemoveDroppedLanguages(dir, m));
+    True(!Directory.Exists(Path.Combine(dir, "de")), "de removed");
+    True(Directory.Exists(Path.Combine(dir, "fr")) && Directory.Exists(Path.Combine(dir, "pl")) && Directory.Exists(Path.Combine(dir, "Fonts")), "others kept");
+    Directory.Delete(dir, true);
+});
 Test("updates: version comparison", () =>
 {
     True(Updates.IsNewer("1.10.0", "1.9.3"), "1.10 > 1.9");

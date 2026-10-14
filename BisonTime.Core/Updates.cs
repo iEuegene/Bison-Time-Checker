@@ -185,6 +185,25 @@ public static class Updates
         }
     }
 
+    /// <summary>
+    /// Language folders of .NET resources ("de", "zh-Hans"…) that the new release no longer ships. Updates only add
+    /// and replace files, so without this they would stay forever. Touches nothing but folders holding *.resources.dll.
+    /// </summary>
+    public static int RemoveDroppedLanguages(string baseDir, UpdateManifest m)
+    {
+        var removed = 0;
+        foreach (var dir in Directory.EnumerateDirectories(baseDir))
+        {
+            var name = System.IO.Path.GetFileName(dir);
+            if (name.StartsWith('.') || m.Files.Any(f => f.Path.StartsWith(name + "/", StringComparison.OrdinalIgnoreCase))) continue;
+            if (!System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-z]{2,3}(-[A-Z][A-Za-z]{1,3})?$")) continue;   // "de", "pt-BR", "zh-Hans"
+            var files = Directory.GetFiles(dir, "*", SearchOption.AllDirectories);
+            if (files.Length == 0 || !files.All(f => f.EndsWith(".resources.dll", StringComparison.OrdinalIgnoreCase))) continue;
+            try { Directory.Delete(dir, recursive: true); removed++; } catch { /* in use: next update */ }
+        }
+        return removed;
+    }
+
     /// <summary>Remove leftovers of a finished update: *.old files and the download folder.</summary>
     public static void Cleanup(string baseDir, string downloadDir)
     {

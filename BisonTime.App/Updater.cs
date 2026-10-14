@@ -89,7 +89,11 @@ internal static class Updater
             items.Add((f, tmp));
         }
         progress("Встановлення…");
-        await Task.Run(() => Updates.Apply(AppDir, items));
+        await Task.Run(() =>
+        {
+            Updates.Apply(AppDir, items);
+            Updates.RemoveDroppedLanguages(AppDir, a.Manifest);
+        });
     }
 
     /// <summary>Start the updated copy and exit this one; the new process waits until we are gone.</summary>

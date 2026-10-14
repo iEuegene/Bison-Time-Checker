@@ -15,7 +15,7 @@
     <RootNamespace>BisonTime.App</RootNamespace>
     <Product>Bison Time Checker</Product>
     <Description>Bison Time Checker (BT) — облік часу по проєктах для щоденного звіту Inweb</Description>
-    <Version>1.10.1</Version>
+    <Version>1.10.2</Version>
     <!-- Full version info: an exe without publisher metadata looks suspicious to antivirus heuristics. -->
     <Company>iEuegene</Company>
     <Authors>iEuegene</Authors>
@@ -23,6 +23,8 @@
     <AssemblyTitle>Bison Time Checker</AssemblyTitle>
     <NeutralLanguage>uk-UA</NeutralLanguage>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- BT's own UI is Ukrainian; .NET's translated error messages for 13 other languages are 221 files nobody reads. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
