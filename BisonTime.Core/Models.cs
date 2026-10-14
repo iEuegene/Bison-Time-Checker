@@ -83,6 +83,8 @@ public sealed class DayState
     public Dictionary<string, string> Comments { get; set; } = new();
     public Dictionary<string, string> CommentBase { get; set; } = new();
     public Dictionary<string, int> Done { get; set; } = new();
+    /// <summary>What each row of a project held when it was marked "Внесено": row key → ms. Shows what came after.</summary>
+    public Dictionary<string, Dictionary<string, long>> DoneRows { get; set; } = new();
     public List<IdleItem> Idle { get; set; } = new();
 }
 

@@ -197,6 +197,22 @@ Test("report: Інше grouped by program, biggest first, time order inside", ()
     var moved = Report.Build(segs, st, S("shop.com.ua")).OtherApps;
     Eq(5 * Min, moved.Single(a => a.Visits.Any(v => v.Moved != null)).Ms);
 });
+Test("report: after «Внесено» the rows that grew or appeared are told apart", () =>
+{
+    var segs = new List<Segment> { Sg(0, 30, "chrome", DocT) };
+    var st = new DayState();
+    var p = Report.Build(segs, st, S("shop.com.ua")).Projects[0];
+    st.Done["shop.com.ua"] = p.Rounded;
+    st.DoneRows["shop.com.ua"] = p.Groups.SelectMany(g => g.Rows).ToDictionary(r => r.Key, r => r.Ms);
+    segs.Add(Sg(40, 50, "chrome", DocT));                                          // the same document, 10 more min
+    segs.Add(Sg(50, 55, "excel", "shop.com.ua.xlsx - Excel"));                    // a new row
+    var after = Report.Build(segs, st, S("shop.com.ua")).Projects[0];
+    True(after.Done.Stale, "stale");
+    var rows = after.Groups.SelectMany(g => g.Rows).ToList();
+    var doc = rows.Single(r => r.Group == "docs"); var xls = rows.Single(r => r.Group == "apps");
+    Eq(10 * Min, doc.NewMs); True(doc.IsNew, "grown");
+    Eq(null, xls.EnteredMs); Eq(5 * Min, xls.NewMs);
+});
 Test("report: Planfix page goes to the project around it, not further than 15 min", () =>
 {
     const string PF = "Bison / Планувальник / inweb - Google Chrome";

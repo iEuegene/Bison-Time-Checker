@@ -13,6 +13,13 @@ public sealed class Row
     public bool Disabled { get; init; }
     /// <summary>When the time was spent, pieces closer than a minute glued together: the "розбір" of a row.</summary>
     public List<Piece> Pieces { get; } = new();
+    /// <summary>Ms this row had when the project was marked "Внесено"; null = the row appeared after (or no snapshot).</summary>
+    public long? EnteredMs { get; set; }
+    /// <summary>The project was marked with a per-row snapshot, so "new since" can be told row by row.</summary>
+    public bool HasSnapshot { get; set; }
+    /// <summary>Time that is not in the report yet: the whole row if it is new, the growth otherwise.</summary>
+    public long NewMs => !HasSnapshot || Disabled ? 0 : Math.Max(0, Ms - (EnteredMs ?? 0));
+    public bool IsNew => NewMs >= 30_000;   // half a minute: the open row ticking on is not news
 }
 
 public sealed class Piece
@@ -274,6 +281,12 @@ public static class Report
                 Text = edited ? txt! : auto, Auto = auto, Edited = edited,
                 Stale = edited && (!state.CommentBase.TryGetValue(name, out var b) || b != auto),
             };
+            if (state.DoneRows.TryGetValue(name, out var snap))
+                foreach (var r in rows)
+                {
+                    r.HasSnapshot = true;
+                    r.EnteredMs = snap.TryGetValue(r.Key, out var was) ? was : null;
+                }
             var hasMark = state.Done.TryGetValue(name, out var mark);
             p.Done = new DoneInfo { Marked = hasMark && mark == rounded, Stale = hasMark && mark != rounded, Diff = hasMark ? rounded - mark : 0 };
             result.Add(p);

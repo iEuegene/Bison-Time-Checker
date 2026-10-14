@@ -235,8 +235,9 @@ internal sealed class DayView : Grid
         _head.Children.Add(row1);
 
         // The big number is what is still to be entered; what is already in the report is said under it.
-        var entered = _report.Projects.Where(p => p.Done.Marked).Sum(p => p.Rounded);
-        var pending = _report.Projects.Where(p => !p.Done.Marked).Sum(p => p.Rounded);
+        // A project entered and then grown counts its entered part as "in the report" and only the growth as pending.
+        var entered = _report.Projects.Where(p => p.Done.Marked || p.Done.Stale).Sum(p => p.Rounded - p.Done.Diff);
+        var pending = _report.Projects.Sum(p => p.Done.Marked ? 0 : p.Done.Stale ? Math.Max(0, p.Done.Diff) : p.Rounded);
         var other = _report.OtherMs >= TimeUtil.Min ? $" · {TimeUtil.FormatExact(_report.OtherMs)} в «Іншому»" : "";
         var size = _flyout ? 30 : 34;
         if (entered > 0 && pending == 0)
@@ -366,8 +367,14 @@ internal sealed class DayView : Grid
         var rows = p.Groups.SelectMany(g => g.Rows).ToList();
         var top = rows.Where(r => !r.Disabled).OrderByDescending(r => r.Ms).FirstOrDefault();
         var sub = $"{rows.Count} {Plural(rows.Count, "рядок", "рядки", "рядків")}" + (top != null ? $" · {top.Label}" : "");
-        if (p.Done.Stale) sub = $"змінилось на {(p.Done.Diff > 0 ? "+" : "")}{p.Done.Diff} хв після «Внесено»";
-        UIElement time = p.Done.Marked
+        if (p.Done.Stale)
+            sub = p.Done.Diff > 0
+                ? $"у звіті вже {TimeUtil.FormatReport(p.Rounded - p.Done.Diff)} — додай {p.Done.Diff} хв"
+                : $"у звіті на {-p.Done.Diff} хв більше, ніж тепер";
+        UIElement time = p.Done.Stale
+            ? HRow(T(TimeUtil.FormatReport(p.Rounded), 12.5, "FaintBrush").M(0, 0, 8, 0),
+                Chip(p.Done.Diff > 0 ? $"+{p.Done.Diff} хв" : $"−{-p.Done.Diff} хв", lime: p.Done.Diff > 0))
+            : p.Done.Marked
             ? HRow(Glyph(G.Check, 13, "MintBrush"), T(TimeUtil.FormatReport(p.Rounded), 13, "MutedBrush", FontWeights.Medium).M(6, 0, 0, 0))
             : Chip(TimeUtil.FormatReport(p.Rounded), lime: p.Rounded > 0);
         if (p.Done.Marked) sub = "внесено у звіт";
@@ -388,11 +395,29 @@ internal sealed class DayView : Grid
         if (open)
         {
             var detail = new StackPanel { Margin = new Thickness(58, 0, 12, 12) };
-            foreach (var g in p.Groups)
+            var all = p.Groups.SelectMany(g => g.Rows).ToList();
+            if (all.Any(r => r.HasSnapshot))
             {
-                detail.Children.Add(T(g.Title, 12, "FaintBrush", FontWeights.SemiBold).M(0, 6, 0, 2));
-                foreach (var r in g.Rows) detail.Children.Add(RowEl(r));
+                var fresh = all.Where(r => r.IsNew).OrderByDescending(r => r.NewMs).ToList();
+                if (fresh.Count > 0)
+                {
+                    detail.Children.Add(Cols("*,Auto", T("Додалося після «Внесено»", 12, "TextBrush", FontWeights.SemiBold),
+                        T("+" + TimeUtil.FormatExact(fresh.Sum(r => r.NewMs)), 12, "TextBrush", FontWeights.SemiBold)).M(0, 6, 0, 2));
+                    foreach (var r in fresh) detail.Children.Add(RowEl(r, badge: r.EnteredMs is > 0 ? "+" + TimeUtil.FormatExact(r.NewMs) : "нове"));
+                }
+                var old = all.Where(r => !r.IsNew).ToList();
+                if (old.Count > 0)
+                {
+                    detail.Children.Add(HRow(Glyph(G.Check, 11, "MintBrush"), T("Уже у звіті", 12, "FaintBrush", FontWeights.SemiBold).M(6, 0, 0, 0)).M(0, 12, 0, 2));
+                    foreach (var r in old) detail.Children.Add(RowEl(r, dim: true));
+                }
             }
+            else
+                foreach (var g in p.Groups)
+                {
+                    detail.Children.Add(T(g.Title, 12, "FaintBrush", FontWeights.SemiBold).M(0, 6, 0, 2));
+                    foreach (var r in g.Rows) detail.Children.Add(RowEl(r));
+                }
             detail.Children.Add(Cols("*,Auto",
                 T($"До округлення {TimeUtil.FormatExact(p.ExactMs)}", 12, "FaintBrush"),
                 HRow(Btn("+5 хв", "Tonal", () => AddManual(p.Name, 5)), Btn("+15 хв", "Tonal", () => AddManual(p.Name, 15)).M(6, 0, 0, 0))).M(0, 10, 0, 0));
@@ -410,7 +435,7 @@ internal sealed class DayView : Grid
         st.Manual.Add(new ManualItem { Id = $"m{Now}", Project = project, Min = min, Label = $"Вручну +{min} хв" }));
 
     /// <summary>A row of a project; a click on it shows when exactly the time was spent.</summary>
-    UIElement RowEl(Row r)
+    UIElement RowEl(Row r, string? badge = null, bool dim = false)
     {
         var label = T(r.Label, 13, r.Disabled ? "FaintBrush" : "TextBrush");
         if (r.Disabled) label.TextDecorations = TextDecorations.Strikethrough;
@@ -422,7 +447,9 @@ internal sealed class DayView : Grid
             r.Disabled ? "Не враховується" : "Враховується");
         var whatBox = new Border { Background = Brushes.Transparent, Child = what, ToolTip = r.Pieces.Count > 0 ? "Клік — коли саме" : null };
         if (r.Pieces.Count > 0) Clickable(whatBox, () => { _openRow = _openRow == key ? null : key; Render(); }, "row:" + key, r.Label);
-        var line = Cols("*,Auto,Auto", whatBox, dur.M(8, 0, 12, 0), sw).M(0, 5, 0, 5);
+        UIElement durEl = badge != null ? HRow(dur, Chip(badge).M(6, 0, 0, 0)) : dur;
+        var line = Cols("*,Auto,Auto", whatBox, ((FrameworkElement)durEl).M(8, 0, 12, 0), sw).M(0, 5, 0, 5);
+        if (dim) whatBox.Opacity = 0.55;
         if (_openRow != key || r.Pieces.Count == 0) return line;
 
         var pieces = new StackPanel { Margin = new Thickness(10, 0, 0, 6) };
@@ -465,14 +492,23 @@ internal sealed class DayView : Grid
         var label = done ? "Скасувати «Внесено»" : p.Done.Stale ? "Внесено ще раз" : "Внесено у звіт";
         var mark = Btn(label, done ? "Quiet" : "Primary", () =>
         {
-            var before = App.Store.LoadDay(_day).State.Done.TryGetValue(name, out var b) ? b : (int?)null;
-            UpdateDay(st => { if (done) st.Done.Remove(name); else st.Done[name] = p.Rounded; });
+            var was = App.Store.LoadDay(_day).State;
+            var before = was.Done.TryGetValue(name, out var b) ? b : (int?)null;
+            var beforeRows = was.DoneRows.TryGetValue(name, out var br) ? new Dictionary<string, long>(br) : null;
+            // Remember what each row held: later growth shows up row by row as "Додалося після «Внесено»".
+            var snapshot = p.Groups.SelectMany(g => g.Rows).ToDictionary(r => r.Key, r => r.Disabled ? 0 : r.Ms);
+            UpdateDay(st =>
+            {
+                if (done) { st.Done.Remove(name); st.DoneRows.Remove(name); }
+                else { st.Done[name] = p.Rounded; st.DoneRows[name] = snapshot; }
+            });
             if (!done)
             {
                 _open.Remove(name);   // it moves down to "Внесено у звіт"
                 Snack($"{name}: {TimeUtil.FormatReport(p.Rounded)} внесено у звіт", () => UpdateDay(st =>
                 {
                     if (before is { } v) st.Done[name] = v; else st.Done.Remove(name);
+                    if (beforeRows != null) st.DoneRows[name] = beforeRows; else st.DoneRows.Remove(name);
                 }));
                 Render();
             }
