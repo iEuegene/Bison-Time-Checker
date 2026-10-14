@@ -89,6 +89,7 @@ internal sealed class DayView : Grid
     public void Open(string? day = null)
     {
         _day = day != null && string.CompareOrdinal(day, Today) <= 0 ? day : Today;
+        _followToday = _day == Today;
         _open.Clear();
         _openApps.Clear();
         _openVisit = null;
@@ -105,6 +106,7 @@ internal sealed class DayView : Grid
         if (string.CompareOrdinal(d, Today) > 0) return;
         if (string.CompareOrdinal(d, TimeUtil.ShiftDay(Today, -(Tracker.KeepSegmentsDays - 1))) < 0) return;
         _day = d;
+        _followToday = d == Today;
         _open.Clear();
         _openApps.Clear();
         _openVisit = null;
@@ -115,8 +117,19 @@ internal sealed class DayView : Grid
 
     // ---------------- data ----------------
 
+    bool _followToday = true;   // showing "today": move on to the new day after midnight or a long sleep
+
     void Load()
     {
+        if (_followToday && _day != Today)
+        {
+            _day = Today;
+            _open.Clear();
+            _openApps.Clear();
+            _openVisit = null;
+            _sel.Clear();
+            _ruleHint = null;
+        }
         if (_day != Today && string.CompareOrdinal(_day, TimeUtil.ShiftDay(Today, -(Tracker.KeepSegmentsDays - 1))) < 0) _day = Today;
         _settings = App.Store.LoadSettings();
         _file = App.Store.LoadDay(_day);

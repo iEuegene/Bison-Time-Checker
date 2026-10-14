@@ -437,6 +437,59 @@ Test("updates: newest release tag when nothing is signed yet", () =>
     Eq(null, Updates.NewestVersion("<html>"), "not json");
 });
 
+// ---------------- edge cases from the review ----------------
+Test("idle left on overnight is never offered back", () =>
+{
+    var (st, tr, _, run, day) = Setup(new DateTime(2026, 10, 12, 23, 40, 0));
+    run(5, DOC, false, false);
+    run(60, DOC, true, false);           // 23:45 → 00:45, nobody at the desk
+    run(1, DOC, false, false);
+    tr.Shutdown();
+    Eq(0, st.DaysMap[day].State.Idle.Count);
+    Eq(0, st.DaysMap.TryGetValue(DayKey(ToMs(new DateTime(2026, 10, 13, 1, 0, 0))), out var next) ? next.State.Idle.Count : 0);
+});
+Test("idle longer than four hours is not offered back", () =>
+{
+    var (st, tr, _, run, day) = Setup(new DateTime(2026, 10, 12, 9, 0, 0));
+    run(5, DOC, false, false);
+    run(300, DOC, true, false);
+    run(1, DOC, false, false);
+    tr.Shutdown();
+    Eq(0, st.DaysMap[day].State.Idle.Count);
+});
+Test("a pause forgotten overnight ends at 05:00", () =>
+{
+    var (st, tr, clock, run, _) = Setup(new DateTime(2026, 10, 12, 4, 30, 0));
+    run(1, DOC, false, false);
+    tr.Pause();
+    run(20, DOC, false, false);
+    True(tr.Paused, "still paused at 04:51");
+    run(15, DOC, false, false);
+    True(!tr.Paused, "resumed after 05:00");
+});
+Test("same title, another site in the address: a new segment", () =>
+{
+    var (st, tr, _, run, day) = Setup();
+    st.Settings.Projects["shop.com.ua"] = new ProjectCfg();
+    st.Settings.Projects["alpha-med.ua"] = new ProjectCfg();
+    const string T = "Ефективність - Search Console - Google Chrome";
+    run(5, new WindowInfo("chrome", T, "search.google.com shop.com.ua"), false, false);
+    run(3, new WindowInfo("chrome", T, null), false, false);                 // address not read yet: same segment
+    run(5, new WindowInfo("chrome", T, "search.google.com alpha-med.ua"), false, false);
+    tr.Shutdown();
+    var r = Report.Build(st.DaysMap[day].Segments, new DayState(), st.Settings);
+    Eq(10, r.Projects.Single(p => p.Name == "shop.com.ua").Rounded);        // 8 min → 10
+    Eq(5, r.Projects.Single(p => p.Name == "alpha-med.ua").Rounded);
+});
+Test("a site naming itself does not become a client", () =>
+{
+    var s = S();
+    Eq(null, Classifier.Classify(new WindowInfo("chrome", "rozetka.com.ua — інтернет-магазин - Google Chrome", "rozetka.com.ua"), s).Project);
+    var task = Classifier.Classify(new WindowInfo("chrome", "newclient.ua - SEO-комплекс - Planfix - Google Chrome", "inweb.planfix.com"), s);
+    Eq("newclient.ua", task.Project); True(task.AutoProject, "a task names a new client");
+    Eq("newclient.ua", Classifier.Classify(new WindowInfo("chrome", "newclient.ua - SEO-комплекс - Google Chrome"), s).Project);   // no address known: as before
+});
+
 // ---------------- finish day, dashboard ----------------
 Test("tracker: finish day stops counting until 05:00, then resumes by itself", () =>
 {

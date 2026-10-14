@@ -34,6 +34,7 @@ public sealed class Tracker
     public const long Gap = 2 * TimeUtil.Min;          // no tick for longer = asleep, app closed, crashed
     public const long MinSegment = 5_000;               // flicks shorter than 5 s are not recorded
     public const long MinIdlePrompt = TimeUtil.Min;     // idle under a minute is not worth asking about
+    public const long MaxIdlePrompt = 4 * 60 * TimeUtil.Min;   // longer than that is not "a meeting away from the desk"
     public const long MinOff = TimeUtil.Min;            // untracked stretches under a minute are not listed
     public const int KeepSegmentsDays = 7;
     public const int KeepDaysDays = 30;
@@ -127,6 +128,8 @@ public sealed class Tracker
         if (_rt.Idle is not { } p) return;
         _rt.Idle = null;
         if (!offer || end - p.S < MinIdlePrompt) return;
+        // A computer left on overnight is not idle work: never offer hours across midnight or half a day back.
+        if (end - p.S > MaxIdlePrompt || TimeUtil.DayKey(p.S) != TimeUtil.DayKey(end - 1)) return;
         var day = TimeUtil.DayKey(p.S);
         var f = _store.LoadDay(day);
         f.State.Idle.Add(new IdleItem { Id = $"i{p.S}", S = p.S, E = end, Project = p.Project });
@@ -158,6 +161,16 @@ public sealed class Tracker
         }
         _rt.LastTick = t;
 
+        // A pause left on overnight is forgotten, not intended: it ends at the morning boundary like "Завершити роботу".
+        if (_rt.PausedSince is { } since && t >= NextMorning(since))
+        {
+            _rt.PausedSince = null;
+            EndOff(t);
+            Log("pause-expired");
+            Save(force: true);
+            Changed?.Invoke();
+        }
+
         if (_rt.DoneUntil is { } until && t >= until)
         {
             _rt.DoneUntil = null;
@@ -180,7 +193,9 @@ public sealed class Tracker
 
         if (reason is null)
         {
-            if (_rt.Open is { } o && o.Proc == w!.Proc && o.Title == w.Title)
+            // Same window = same program and title, and the address did not move to another site
+            // (single-page apps like Search Console switch the property without changing the title).
+            if (_rt.Open is { } o && o.Proc == w!.Proc && o.Title == w.Title && (w.Url == null || o.Url == null || o.Url == w.Url))
             {
                 o.Beat = t;
                 // The address is read in the background and may arrive a moment after the window does.

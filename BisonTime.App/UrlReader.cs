@@ -12,7 +12,8 @@ namespace BisonTime.App;
 internal sealed class UrlReader
 {
     readonly object _lock = new();
-    readonly Dictionary<(IntPtr, string), string?> _cache = new();     // window + title → reduced url (null = none)
+    readonly Dictionary<(IntPtr, string), (string? Url, long At)> _cache = new();   // window + title → reduced url (null = none)
+    const long Fresh = 10_000;   // single-page apps change the address without the title: re-read every 10 s
     readonly Dictionary<(IntPtr, string), int> _misses = new();
     readonly Dictionary<IntPtr, AutomationElement> _bars = new();       // worker thread only
     (IntPtr Hwnd, string Title)? _queued;
@@ -29,7 +30,13 @@ internal sealed class UrlReader
     {
         lock (_lock)
         {
-            if (_cache.TryGetValue((hwnd, title), out var known)) return known;
+            if (_cache.TryGetValue((hwnd, title), out var known))
+            {
+                if (Environment.TickCount64 - known.At < Fresh) return known.Url;
+                _queued = (hwnd, title);   // refresh in the background, meanwhile the last known address
+                _signal.Set();
+                return known.Url;
+            }
             _queued = (hwnd, title);
         }
         _signal.Set();
@@ -58,7 +65,7 @@ internal sealed class UrlReader
                     if (n < 5) continue;
                 }
                 if (_cache.Count > 500) { _cache.Clear(); _misses.Clear(); }
-                _cache[(j.Hwnd, j.Title)] = url;
+                _cache[(j.Hwnd, j.Title)] = (url, Environment.TickCount64);
             }
         }
     }
