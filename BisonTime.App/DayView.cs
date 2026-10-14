@@ -249,8 +249,7 @@ internal sealed class DayView : Grid
         else
         {
             _head.Children.Add(T(TimeUtil.FormatReport(pending), size, weight: FontWeights.Bold, display: true, ellipsis: false).M(4, 8, 0, 0));
-            var note = entered > 0 ? $"ще внести · у звіті вже {TimeUtil.FormatReport(entered)}" : "до звіту";
-            _head.Children.Add(T(note + other, 12.5, "MutedBrush").M(4, 2, 0, 0));
+            _head.Children.Add(T((entered > 0 ? "ще внести" : "до звіту") + other, 12.5, "MutedBrush").M(4, 2, 0, 0));
         }
 
         if (_day != Today) return;
@@ -367,10 +366,12 @@ internal sealed class DayView : Grid
         var rows = p.Groups.SelectMany(g => g.Rows).ToList();
         var top = rows.Where(r => !r.Disabled).OrderByDescending(r => r.Ms).FirstOrDefault();
         var sub = $"{rows.Count} {Plural(rows.Count, "рядок", "рядки", "рядків")}" + (top != null ? $" · {top.Label}" : "");
-        if (p.Done.Stale)
-            sub = p.Done.Diff > 0
-                ? $"у звіті вже {TimeUtil.FormatReport(p.Rounded - p.Done.Diff)} — додай {p.Done.Diff} хв"
-                : $"у звіті на {-p.Done.Diff} хв більше, ніж тепер";
+        // The chips say it all; the explanation lives in their tooltip, not in another line of text.
+        string? tip = p.Done.Stale
+            ? (p.Done.Diff > 0
+                ? $"У звіті вже {TimeUtil.FormatReport(p.Rounded - p.Done.Diff)}. Додай {p.Done.Diff} хв і натисни «Внесено ще раз»."
+                : $"У звіті на {-p.Done.Diff} хв більше, ніж тепер.")
+            : null;
         UIElement time = p.Done.Stale
             ? HRow(T(TimeUtil.FormatReport(p.Rounded), 12.5, "FaintBrush").M(0, 0, 8, 0),
                 Chip(p.Done.Diff > 0 ? $"+{p.Done.Diff} хв" : $"−{-p.Done.Diff} хв", lime: p.Done.Diff > 0))
@@ -382,9 +383,10 @@ internal sealed class DayView : Grid
         if (p.Rounded == 0 && p.ExactMs > 0 && !p.Done.Marked)
         {
             time = Chip(TimeUtil.FormatExact(p.ExactMs), lime: false);
-            sub = _settings.RoundStep > 1 ? $"у звіт іде від {(_settings.RoundStep + 1) / 2} хв — зараз округлюється до 0" : sub;
+            tip = $"Менше половини кроку округлення: у звіт поки йде 0. Лаймовою плашка стане від {(_settings.RoundStep + 1) / 2} хв.";
         }
-        var subText = T(sub, 12, p.Done.Stale ? "OrangeBrush" : "FaintBrush");
+        var subText = T(sub, 12, "FaintBrush");
+        if (tip != null && time is FrameworkElement te) te.ToolTip = tip;
         var head = Cols("Auto,*,Auto", Avatar(p.Name, p.Name == _current),
             Col(1, T(p.Name, 14, weight: FontWeights.SemiBold), subText).M(12, 0, 8, 0), time);
         var headBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(10, 10, 10, 10), Child = head };
