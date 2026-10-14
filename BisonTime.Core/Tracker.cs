@@ -20,7 +20,7 @@ public static class OffReasons
 {
     public static readonly Dictionary<string, string> Names = new()
     {
-        ["focus"] = "BT не бачить вікна", ["idle"] = "простій", ["lock"] = "екран заблоковано",
+        ["focus"] = "робочий стіл і вікна BT", ["idle"] = "простій", ["lock"] = "екран заблоковано",
         ["pause"] = "пауза", ["untracked"] = "ігнор", ["done"] = "день завершено",
     };
 }

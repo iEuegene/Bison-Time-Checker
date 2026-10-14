@@ -47,6 +47,7 @@ internal sealed class MainWindow : Window
         Left = area.Right - Width - 12;
         Top = area.Bottom - Height - 12;
         _view.Open(day);
+        Ui.FadeIn((UIElement)Content, 160);
         Show();
         Activate();
     }

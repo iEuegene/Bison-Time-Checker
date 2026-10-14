@@ -427,8 +427,6 @@ internal sealed class DayView : Grid
             box.Children.Add(detail);
         }
         var card = new Border { CornerRadius = new CornerRadius(16), Background = open ? B("CardBrush") : Brushes.Transparent, Child = box };
-        if (!open) card.MouseEnter += (_, _) => card.Background = B("CardHiBrush");
-        if (!open) card.MouseLeave += (_, _) => card.Background = Brushes.Transparent;
         if ((p.Rounded == 0 || p.Done.Marked) && !open) card.Opacity = p.Done.Marked ? 0.6 : 0.75;
         return card;
     }
@@ -450,7 +448,32 @@ internal sealed class DayView : Grid
         var whatBox = new Border { Background = Brushes.Transparent, Child = what, ToolTip = r.Pieces.Count > 0 ? "Клік — коли саме" : null };
         if (r.Pieces.Count > 0) Clickable(whatBox, () => { _openRow = _openRow == key ? null : key; Render(); }, "row:" + key, r.Label);
         UIElement durEl = badge != null ? HRow(dur, Chip(badge).M(6, 0, 0, 0)) : dur;
-        var line = Cols("*,Auto,Auto", whatBox, ((FrameworkElement)durEl).M(8, 0, 12, 0), sw).M(0, 5, 0, 5);
+        // "+5 хв" by mistake or a wrong move: these rows go away entirely (with undo), not only switch off.
+        var rk = key[(key.IndexOf('|') + 1)..];
+        Button? remove = null;
+        if (rk.StartsWith("man:"))
+        {
+            var id = rk[4..];
+            remove = IconBtn("\uE711", () =>
+            {
+                var item = App.Store.LoadDay(_day).State.Manual.FirstOrDefault(m => m.Id == id);
+                if (item == null) return;
+                UpdateDay(st => st.Manual.RemoveAll(m => m.Id == id));
+                Snack($"Прибрано «{r.Label}»", () => UpdateDay(st => st.Manual.Add(item)));
+            }, "Прибрати цей рядок", 11);
+        }
+        else if (rk.StartsWith("moved:"))
+        {
+            var visit = rk[6..];
+            remove = IconBtn("\uE711", () =>
+            {
+                var target = App.Store.LoadDay(_day).State.Moved.TryGetValue(visit, out var t) ? t : null;
+                if (target == null) return;
+                UpdateDay(st => st.Moved.Remove(visit));
+                Snack("Повернуто в «Інше»", () => UpdateDay(st => st.Moved[visit] = target));
+            }, "Повернути в «Інше»", 11);
+        }
+        var line = Cols("*,Auto,Auto,Auto", whatBox, ((FrameworkElement)durEl).M(8, 0, 12, 0), sw, remove?.M(4, 0, 0, 0)).M(0, 5, 0, 5);
         if (dim) whatBox.Opacity = 0.55;
         if (_openRow != key || r.Pieces.Count == 0) return line;
 
@@ -619,6 +642,7 @@ internal sealed class DayView : Grid
         undoBtn.Foreground = B("GreenBrush");
         _snack.Child = Cols("*,Auto", msg, undoBtn);
         _snack.Visibility = Visibility.Visible;
+        FadeIn(_snack, 180);
         _snackTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
         _snackTimer.Tick += (_, _) => { _snackTimer.Stop(); _snack.Visibility = Visibility.Collapsed; };
         _snackTimer.Start();

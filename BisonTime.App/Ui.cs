@@ -246,6 +246,14 @@ internal static class Ui
     /// </summary>
     public static void Clickable(UIElement el, Action onClick, string? id = null, string? name = null)
     {
+        // Hover: a faint light layer on transparent surfaces, so every clickable row answers the pointer.
+        if (el is Border hb && (hb.Background == null || hb.Background == Brushes.Transparent))
+        {
+            if (hb.CornerRadius == default) hb.CornerRadius = new CornerRadius(8);
+            hb.Background = Brushes.Transparent;
+            hb.MouseEnter += (_, _) => hb.Background = Hover;
+            hb.MouseLeave += (_, _) => hb.Background = Brushes.Transparent;
+        }
         if (el is FrameworkElement fe)
         {
             fe.Cursor = Cursors.Hand;
@@ -280,6 +288,43 @@ internal static class Ui
 
     /// <summary>The Uid of whatever has keyboard focus now (empty when it has none).</summary>
     public static string? FocusedId() => (Keyboard.FocusedElement as FrameworkElement)?.Uid is { Length: > 0 } u ? u : null;
+
+    static readonly SolidColorBrush Hover = Freeze(new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)));
+    static T Freeze<T>(T f) where T : Freezable { f.Freeze(); return f; }
+
+    /// <summary>
+    /// Windows 11 title bar in the app's own dark green instead of the system white (no effect on Windows 10).
+    /// </summary>
+    public static void DarkTitleBar(Window w)
+    {
+        w.SourceInitialized += (_, _) =>
+        {
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+                var on = 1;
+                DwmSetWindowAttribute(hwnd, 20, ref on, sizeof(int));          // DWMWA_USE_IMMERSIVE_DARK_MODE
+                var caption = 0x0019220B;                                      // COLORREF of #0B2219 (BGR)
+                DwmSetWindowAttribute(hwnd, 35, ref caption, sizeof(int));     // DWMWA_CAPTION_COLOR
+                var border = 0x00313D1D;                                       // #1D3D31
+                DwmSetWindowAttribute(hwnd, 34, ref border, sizeof(int));      // DWMWA_BORDER_COLOR
+            }
+            catch { /* older Windows: default title bar */ }
+        };
+    }
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    /// <summary>Fade in over 150 ms (opacity only), unless Windows animations are switched off.</summary>
+    public static void FadeIn(UIElement el, int ms = 150)
+    {
+        if (!SystemParameters.ClientAreaAnimation) { el.Opacity = 1; return; }
+        el.BeginAnimation(UIElement.OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms))
+        {
+            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
+        });
+    }
 
     /// <summary>True while one of our project menus is open: views hold off rebuilding under it.</summary>
     public static bool MenuOpen { get; private set; }

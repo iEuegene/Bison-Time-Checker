@@ -28,6 +28,7 @@ internal sealed class AppWindow : Window
     };
 
     AppPage _tab = AppPage.Today;
+    AppPage? _shown;   // page on screen: a page change fades in, a re-render of the same page does not
     readonly StackPanel _nav = new();
     readonly StackPanel _navBottom = new();
     readonly StackPanel _page = new() { Margin = new Thickness(36, 30, 36, 36), MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Left };
@@ -55,6 +56,7 @@ internal sealed class AppWindow : Window
         UseLayoutRounding = true;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Ideal);
         try { Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/bt-64.png")); } catch { /* cosmetic */ }
+        DarkTitleBar(this);
 
         var logo = Plate("BT").M(0, 0, 0, 22);
         logo.HorizontalAlignment = HorizontalAlignment.Center;
@@ -155,14 +157,17 @@ internal sealed class AppWindow : Window
             case AppPage.Today:
                 if (_today == null) { _today = new DayView(flyout: false); _today.Open(); }
                 _host.Content = _today;
+                if (_shown != _tab) { _shown = _tab; FadeIn(_host, 150); }
                 return;
             case AppPage.Dashboard:
                 _dashboard ??= new DashboardView(day => ShowDay(day));
                 _dashboard.Render();
                 _host.Content = _dashboard;
+                if (_shown != _tab) { _shown = _tab; FadeIn(_host, 150); }
                 return;
         }
         _host.Content = _scroll;
+        if (_shown != _tab) { _shown = _tab; FadeIn(_host, 150); }
         _page.Children.Clear();
         switch (_tab)
         {
@@ -290,7 +295,13 @@ internal sealed class AppWindow : Window
             pick!.Content = new TextBlock { Text = v, FontFamily = TextFont };
         });
         _page.Children.Add(AddRow("фрагмент заголовка або програма (figma)", "Додати правило",
-            v => { if (chosen != "") Save(s => s.Rules.Add(new Rule { Match = v, Project = chosen })); }, pick));
+            v =>
+            {
+                if (chosen != "") { Save(s => s.Rules.Add(new Rule { Match = v, Project = chosen })); return; }
+                // Say why nothing happened, right at the cause.
+                pick!.Content = new TextBlock { Text = "Спершу обери проєкт", FontFamily = TextFont, Foreground = B("OrangeBrush") };
+                pick.BorderBrush = B("OrangeBrush");
+            }, pick));
 
         H2("Таск-менеджери", "Фрагменти заголовка, за якими BT впізнає таск-менеджер. Задача з доменом клієнта в назві йде в цей проєкт; " +
             "сторінка без нього (планувальник, списки) — у проєкт, над яким ти працював у межах 15 хв до або після.");
