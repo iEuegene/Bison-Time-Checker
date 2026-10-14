@@ -367,12 +367,17 @@ internal sealed class DayView : Grid
         var top = rows.Where(r => !r.Disabled).OrderByDescending(r => r.Ms).FirstOrDefault();
         var sub = $"{rows.Count} {Plural(rows.Count, "рядок", "рядки", "рядків")}" + (top != null ? $" · {top.Label}" : "");
         if (p.Done.Stale) sub = $"змінилось на {(p.Done.Diff > 0 ? "+" : "")}{p.Done.Diff} хв після «Внесено»";
-        var subText = T(sub, 12, p.Done.Stale ? "OrangeBrush" : "FaintBrush");
-
         UIElement time = p.Done.Marked
             ? HRow(Glyph(G.Check, 13, "MintBrush"), T(TimeUtil.FormatReport(p.Rounded), 13, "MutedBrush", FontWeights.Medium).M(6, 0, 0, 0))
             : Chip(TimeUtil.FormatReport(p.Rounded), lime: p.Rounded > 0);
         if (p.Done.Marked) sub = "внесено у звіт";
+        // A few minutes round down to nothing: show the real minutes, not a puzzling "0 год 0 хв".
+        if (p.Rounded == 0 && p.ExactMs > 0 && !p.Done.Marked)
+        {
+            time = Chip(TimeUtil.FormatExact(p.ExactMs), lime: false);
+            sub = _settings.RoundStep > 1 ? $"у звіт іде від {(_settings.RoundStep + 1) / 2} хв — зараз округлюється до 0" : sub;
+        }
+        var subText = T(sub, 12, p.Done.Stale ? "OrangeBrush" : "FaintBrush");
         var head = Cols("Auto,*,Auto", Avatar(p.Name, p.Name == _current),
             Col(1, T(p.Name, 14, weight: FontWeights.SemiBold), subText).M(12, 0, 8, 0), time);
         var headBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(10, 10, 10, 10), Child = head };
