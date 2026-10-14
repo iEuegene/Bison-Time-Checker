@@ -20,7 +20,7 @@ internal sealed class DayView : Grid
     bool _otherOpen, _showShort, _chrono;
     string? _openRow;
     readonly HashSet<string> _sel = new();                 // visits of Інше picked for a bulk move
-    (string Fragment, string Project)? _ruleHint;            // offered after a bulk move
+    (string Match, string Text, string Project)? _ruleHint;  // offered after a move: a title fragment or an address id
     readonly HashSet<string> _openApps = new(StringComparer.OrdinalIgnoreCase);
     string? _openVisit;
     readonly StackPanel _head = new();
@@ -525,23 +525,48 @@ internal sealed class DayView : Grid
     void MoveSelected(string project)
     {
         var sel = Selected();
-        var fragment = Classifier.CommonFragment(sel.Select(t => t.Label));
         UpdateDay(st => { foreach (var t in sel) st.Moved[t.Key] = project; });
         _sel.Clear();
-        // Offer to make it automatic, unless a rule like that already exists.
-        _ruleHint = fragment != null && !_settings.Rules.Any(r => string.Equals(r.Match, fragment, StringComparison.OrdinalIgnoreCase))
-            ? (fragment, project) : null;
+        OfferRule(sel, project);
         Render();
+    }
+
+    void MoveOne(TimelineItem t, string project)
+    {
+        UpdateDay(st => st.Moved[t.Key] = project);
+        OfferRule(new List<TimelineItem> { t }, project);
+        Render();
+    }
+
+    /// <summary>
+    /// Offer to make a move automatic. An address id shared by all moved visits (a Serpstat project, a GA4
+    /// property, a Planfix task) is the most precise; otherwise a site name shared by most titles.
+    /// </summary>
+    void OfferRule(List<TimelineItem> moved, string project)
+    {
+        _ruleHint = null;
+        var anchors = moved.Select(t => Classifier.UrlAnchor(t.Url)).Distinct().ToList();
+        if (anchors.Count == 1 && anchors[0] is { } a)
+        {
+            var match = Classifier.UrlRulePrefix + a;
+            if (!_settings.Rules.Any(r => string.Equals(r.Match, match, StringComparison.OrdinalIgnoreCase)))
+                _ruleHint = (match, $"Адреса {Classifier.DescribeAnchor(a)}", project);
+            return;
+        }
+        if (moved.Count < 2) return;
+        var fragment = Classifier.CommonFragment(moved.Select(t => t.Label));
+        if (fragment != null && !_settings.Rules.Any(r => string.Equals(r.Match, fragment, StringComparison.OrdinalIgnoreCase)))
+            _ruleHint = (fragment, $"У заголовках було «{fragment}»", project);
     }
 
     UIElement? RuleHint()
     {
         if (_ruleHint is not { } h) return null;
-        var text = T($"У заголовках було «{h.Fragment}». Завжди відносити такі вікна до {h.Project}?", 12.5, wrap: true);
+        var text = T($"{h.Text}. Завжди відносити такі вікна до {h.Project}?", 12.5, wrap: true);
         var yes = Btn("Створити правило", "Primary", () =>
         {
             _ruleHint = null;
-            UpdateSettings(s => s.Rules.Add(new Rule { Match = h.Fragment, Project = h.Project }));
+            UpdateSettings(s => s.Rules.Add(new Rule { Match = h.Match, Project = h.Project }));
         });
         var no = Btn("Ні", "Quiet", () => { _ruleHint = null; Render(); }).M(4, 0, 0, 0);
         return Card(Col(8, text, HRow(yes, no)), "CardHiBrush", "LimeBrush", 12).M(0, 0, 0, 8);
@@ -689,7 +714,7 @@ internal sealed class DayView : Grid
                 acts.Children.Add(Btn("скасувати перенесення", "Quiet", () => UpdateDay(st => st.Moved.Remove(t.Key))));
             else
             {
-                acts.Children.Add(Picker("→ Проєкт", "Tonal", ProjectNames(), v => UpdateDay(st => st.Moved[t.Key] = v)));
+                acts.Children.Add(Picker("→ Проєкт", "Tonal", ProjectNames(), v => MoveOne(t, v)));
                 if (t.Browser)
                     acts.Children.Add(Btn("Ігнорувати сторінку", "Quiet",
                         () => UpdateSettings(s => { if (!s.Ignore.Contains(t.Label)) s.Ignore.Add(t.Label); }),

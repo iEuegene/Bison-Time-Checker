@@ -68,6 +68,7 @@ public sealed class TimelineItem
     public string App { get; init; } = "";
     public string Proc { get; init; } = "";
     public bool Browser { get; init; }
+    public string? Url { get; init; }
     public string? Moved { get; set; }
 }
 
@@ -233,7 +234,7 @@ public static class Report
             else
             {
                 timeline.Add(new TimelineItem { Key = $"o:{seg.S}", RowKey = c.RowKey, S = seg.S, E = seg.E, Ms = ms,
-                    Label = c.Label, App = c.App, Proc = c.Proc, Browser = c.Browser });
+                    Label = c.Label, App = c.App, Proc = c.Proc, Browser = c.Browser, Url = seg.Url });
             }
         }
 

@@ -480,6 +480,15 @@ Test("browser address: reduced to domains, used when the title names no project"
     Eq("shop.com.ua", U("Ефективність у результатах пошуку - Google Chrome", "https://search.google.com/search-console/performance?resource_id=sc-domain%3Ashop.com.ua").Project);
     Eq(null, U("Новини дня - Google Chrome", "https://news.example.com/").Project);       // unknown site: no new project
     Eq("shop.com.ua", U("shop.com.ua / ТЗ / Тест - Google Docs - Google Chrome", "https://docs.google.com/document/d/abc").Project);
+    // tools that name the client by an id: an address rule binds it
+    const string Rank = "https://serpstat.com/rank-tracker/keywords/1291746/positions?&date_start=2026-10-14&domain=63c5c6a7-169d-46b3-bf5a-3e3a680993d5&region=414537&page=1";
+    Eq("serpstat.com serpstat.com#1291746", Classifier.ReduceUrl(Rank));
+    Eq("analytics.google.com analytics.google.com#p345678901", Classifier.ReduceUrl("https://analytics.google.com/analytics/web/#/a12345p345678901/reports/intelligenthome"));
+    Eq(null, U("Позиції - Serpstat - Google Chrome", Rank).Project);
+    s.Rules.Add(new Rule { Match = "url:serpstat.com#1291746", Project = "shop.com.ua" });
+    var ranked = U("Позиції - Serpstat - Google Chrome", Rank);
+    Eq("shop.com.ua", ranked.Project); Eq("linked", ranked.Group);
+    Eq(null, U("Позиції - Serpstat - Google Chrome", Rank.Replace("1291746", "2222222")).Project);   // another Serpstat project
     s.ReadUrls = false;
     Eq(null, U("Головна | Coffee Shop - Google Chrome", "https://coffee-shop.com.ua/").Project);
 });

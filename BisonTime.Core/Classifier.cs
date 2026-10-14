@@ -142,17 +142,34 @@ public static class Classifier
             if (d != "" && !parts.Contains(d)) parts.Add(d);
             if (parts.Count >= 6) break;
         }
+        // Tools that name the client by an id instead of a domain (Serpstat project, GA4 property, Planfix task,
+        // Looker report): keep "host#id" so a rule can bind that id to a project. Ids only, never the path.
+        var anchor = AnchorId.Match(Uri.UnescapeDataString(uri.AbsolutePath + uri.Fragment));
+        if (anchor.Success) parts.Add($"{host}#{anchor.Groups["id"].Value.ToLowerInvariant()}");
         return string.Join(' ', parts);
     }
+
+    static readonly Regex AnchorId = new(
+        @"(?:^|[/#])(?:a\d+)?(?<id>p?\d{5,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?=$|[/?#&])",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>The known project a reduced URL points to: the host first, then domains named inside it.</summary>
     public static string? UrlProject(string? reduced, Dictionary<string, string> idx)
     {
         if (string.IsNullOrWhiteSpace(reduced)) return null;
         foreach (var d in reduced.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            if (ResolveDomain(d, idx) is { } p) return p;
+            if (!d.Contains('#') && ResolveDomain(d, idx) is { } p) return p;
         return null;
     }
+
+    public const string UrlRulePrefix = "url:";
+
+    /// <summary>"serpstat.com#1291746" of a reduced URL, if it has one: what an address rule binds to a project.</summary>
+    public static string? UrlAnchor(string? reduced) =>
+        reduced?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(x => x.Contains('#'));
+
+    /// <summary>For people: "serpstat.com · 1291746".</summary>
+    public static string DescribeAnchor(string anchor) => anchor.Replace("#", " · ");
 
     public const string ProjectSites = "Сайти й задачі проєктів";
     public const string OtherTabs = "Інші вкладки";
@@ -310,7 +327,7 @@ public static class Classifier
         foreach (var r in s.Rules)
         {
             var m = r.Match.Trim();
-            if (m == "") continue;
+            if (m == "" || m.StartsWith(UrlRulePrefix, StringComparison.OrdinalIgnoreCase)) continue;
             var isApp = string.Equals(m, w.Proc, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(m, w.Proc + ".exe", StringComparison.OrdinalIgnoreCase);
             if (appRules ? isApp : (!isApp && clean.Contains(m, StringComparison.OrdinalIgnoreCase))) return r;
@@ -374,7 +391,13 @@ public static class Classifier
         var group = browser ? "web" : "apps";
         string Key(string g, string label) => $"{g}:{(g == "apps" ? w.Proc + "|" : "")}{label.ToLowerInvariant()}";
 
-        // 1. A title rule is the user's explicit word: it wins.
+        // 1. A rule is the user's explicit word: it wins. Address rules ("url:serpstat.com#1291746") first.
+        var urlRule = s.ReadUrls && UrlAnchor(w.Url) is { } anchor
+            ? s.Rules.FirstOrDefault(r => r.Match.StartsWith(UrlRulePrefix, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(r.Match[UrlRulePrefix.Length..].Trim(), anchor, StringComparison.OrdinalIgnoreCase))
+            : null;
+        if (urlRule != null && idx.TryGetValue(urlRule.Project.ToLowerInvariant(), out var up))
+            return new Cls("linked", up, $"link:{w.Proc}|{shown.ToLowerInvariant()}", shown == "" ? app : shown, "", w.Proc, app, browser);
         var rule = MatchRule(w, clean, s, appRules: false);
         if (rule != null && idx.TryGetValue(rule.Project.ToLowerInvariant(), out var rp))
             return new Cls("linked", rp, $"link:{w.Proc}|{shown.ToLowerInvariant()}", shown == "" ? app : shown, "", w.Proc, app, browser);

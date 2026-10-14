@@ -276,7 +276,8 @@ internal sealed class AppWindow : Window
         H1("Правила", "Коли домену клієнта немає в заголовку вікна. Фрагмент заголовка («Looker Studio», «Звіт Ahrefs») або назва програми " +
             "(figma, excel) → проєкт. Правило за заголовком перевіряється першим; правило на всю програму поступається домену клієнта в заголовку.");
         var items = _s.Rules.Select((r, i) => (UIElement)Cols("*,Auto",
-            Col(2, T(r.Match, 13, weight: FontWeights.SemiBold), T($"→ {r.Project}", 12, "MutedBrush")),
+            Col(2, T(r.Match.StartsWith(Classifier.UrlRulePrefix) ? "Адреса: " + Classifier.DescribeAnchor(r.Match[Classifier.UrlRulePrefix.Length..]) : r.Match,
+                13, weight: FontWeights.SemiBold), T($"→ {r.Project}", 12, "MutedBrush")),
             Btn("Видалити", "Quiet", () => Save(s => s.Rules.RemoveAt(i)))));
         _page.Children.Add(ListCard(items, "Правил немає."));
 
