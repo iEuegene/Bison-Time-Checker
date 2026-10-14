@@ -118,6 +118,42 @@ public static class Classifier
         return best;
     }
 
+    static readonly Regex DomainToken = new(@"(?:sc-domain:|https?://)?((?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+\p{L}{2,})", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Address bar text → "host other.domain …": the host plus domain-looking values from the path and query
+    /// (Search Console resource, Ahrefs/Serpstat target). Nothing else of the URL is kept: paths can carry
+    /// tokens and personal data. Null while the user is typing a search or the text is not a URL.
+    /// </summary>
+    public static string? ReduceUrl(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var t = raw.Trim();
+        if (t.Contains(' ')) return null;                                   // a search being typed
+        if (!Regex.IsMatch(t, "^[a-z][a-z0-9+.-]*://", RegexOptions.IgnoreCase)) t = "https://" + t;
+        if (!Uri.TryCreate(t, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) return null;
+        var host = NormalizeDomain(uri.Host);
+        if (host == "") return null;
+        var parts = new List<string> { host };
+        var rest = Uri.UnescapeDataString(uri.AbsolutePath + " " + uri.Query.Replace('&', ' ').Replace('=', ' '));
+        foreach (Match m in DomainToken.Matches(rest))
+        {
+            var d = NormalizeDomain(m.Groups[1].Value);
+            if (d != "" && !parts.Contains(d)) parts.Add(d);
+            if (parts.Count >= 6) break;
+        }
+        return string.Join(' ', parts);
+    }
+
+    /// <summary>The known project a reduced URL points to: the host first, then domains named inside it.</summary>
+    public static string? UrlProject(string? reduced, Dictionary<string, string> idx)
+    {
+        if (string.IsNullOrWhiteSpace(reduced)) return null;
+        foreach (var d in reduced.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            if (ResolveDomain(d, idx) is { } p) return p;
+        return null;
+    }
+
     public const string ProjectSites = "Сайти й задачі проєктів";
     public const string OtherTabs = "Інші вкладки";
 
@@ -361,6 +397,15 @@ public static class Classifier
             if (label == "") label = app;
             var g = GoogleSuffix.IsMatch(clean) ? "docs" : group;
             return new Cls(g, named.Value.Project, Key(g, label), label, "", w.Proc, app, browser);
+        }
+
+        // 3b. The browser's address: the client's site under a brand title ("… | Coffee Shop"), or a tool
+        //     that carries the client's domain in its URL (Search Console resource, Ahrefs target…). Known projects only.
+        if (browser && s.ReadUrls && UrlProject(w.Url, idx) is { } byUrl)
+        {
+            var label = shown == "" ? app : shown;
+            var g = GoogleSuffix.IsMatch(clean) ? "docs" : group;
+            return new Cls(g, byUrl, Key(g, label), label, "", w.Proc, app, browser);
         }
 
         // 4. A title that starts with a domain and a separator names a client: "gamma2.eu - SEO-комплекс".

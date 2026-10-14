@@ -467,6 +467,22 @@ Test("tracker: resume right after finishing", () =>
     tr.Shutdown();
     True(!tr.Done, "resumed"); Eq(2, st.DaysMap[day].Segments.Count);
 });
+Test("browser address: reduced to domains, used when the title names no project", () =>
+{
+    Eq("coffee-shop.com.ua", Classifier.ReduceUrl("coffee-shop.com.ua/catalog/toppers?utm_source=x&token=SECRET"));
+    Eq("search.google.com shop.com.ua", Classifier.ReduceUrl("https://search.google.com/search-console/performance?resource_id=sc-domain%3Ashop.com.ua"));
+    Eq("app.ahrefs.com alpha-med.ua", Classifier.ReduceUrl("app.ahrefs.com/site-explorer/overview?target=https%3A%2F%2Falpha-med.ua%2F&mode=domain"));
+    Eq(null, Classifier.ReduceUrl("купити каву київ"));            // a search being typed
+    Eq(null, Classifier.ReduceUrl("chrome://settings"));
+    var s = S("coffee-shop.com.ua", "shop.com.ua");
+    Cls U(string title, string? url) => Classifier.Classify(new WindowInfo("chrome", title, Classifier.ReduceUrl(url)), s);
+    Eq("coffee-shop.com.ua", U("Харчові інгредієнти та інвентар | Coffee Shop - Google Chrome", "https://www.coffee-shop.com.ua/catalog/").Project);
+    Eq("shop.com.ua", U("Ефективність у результатах пошуку - Google Chrome", "https://search.google.com/search-console/performance?resource_id=sc-domain%3Ashop.com.ua").Project);
+    Eq(null, U("Новини дня - Google Chrome", "https://news.example.com/").Project);       // unknown site: no new project
+    Eq("shop.com.ua", U("shop.com.ua / ТЗ / Тест - Google Docs - Google Chrome", "https://docs.google.com/document/d/abc").Project);
+    s.ReadUrls = false;
+    Eq(null, U("Головна | Coffee Shop - Google Chrome", "https://coffee-shop.com.ua/").Project);
+});
 Test("bulk move suggests the shared site name as a rule", () =>
 {
     Eq("Coffee Shop", Classifier.CommonFragment(new[]

@@ -3,7 +3,8 @@ using System.Text.Json.Serialization;
 namespace BisonTime.Core;
 
 /// <summary>What is in front of the user right now: process name (lowercase, no .exe) + window title.</summary>
-public sealed record WindowInfo(string Proc, string Title);
+/// <param name="Url">For browsers: the address reduced to domains only (<see cref="Classifier.ReduceUrl"/>), when it could be read.</param>
+public sealed record WindowInfo(string Proc, string Title, string? Url = null);
 
 /// <summary>A stretch of time spent in one window. Times are Unix ms.</summary>
 public sealed class Segment
@@ -12,6 +13,8 @@ public sealed class Segment
     public long E { get; set; }
     public string Proc { get; set; } = "";
     public string Title { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? Url { get; set; }
 }
 
 public sealed class ProjectCfg
@@ -41,6 +44,8 @@ public sealed class Settings
     public bool Autostart { get; set; } = true;
     /// <summary>Once a day ask GitHub Releases whether a newer version exists.</summary>
     public bool AutoUpdateCheck { get; set; } = true;
+    /// <summary>Read the browser's address bar (domains only) when the title names no project.</summary>
+    public bool ReadUrls { get; set; } = true;
     /// <summary>Unix ms of the last automatic check.</summary>
     public long LastUpdateCheck { get; set; }
 }
@@ -120,6 +125,7 @@ public sealed class OpenSeg
     public long Beat { get; set; }
     public string Proc { get; set; } = "";
     public string Title { get; set; } = "";
+    public string? Url { get; set; }
 }
 
 public sealed class OffState

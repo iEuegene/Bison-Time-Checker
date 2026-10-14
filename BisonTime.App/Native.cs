@@ -56,8 +56,13 @@ internal sealed class WindowWatcher
 
     readonly Dictionary<uint, string> _names = new();
     readonly uint _self = (uint)Environment.ProcessId;
+    readonly UrlReader _urls = new();
 
-    public WindowInfo? Sample()
+    // Chromium browsers expose the address bar; Firefox does it differently and is left to the title.
+    static readonly HashSet<string> UrlBrowsers = new(StringComparer.OrdinalIgnoreCase)
+        { "chrome", "msedge", "brave", "opera", "vivaldi", "chromium", "arc" };
+
+    public WindowInfo? Sample(bool readUrl = false)
     {
         var hwnd = Native.GetForegroundWindow();
         if (hwnd == IntPtr.Zero) return null;
@@ -67,7 +72,8 @@ internal sealed class WindowWatcher
         if (Shell.Contains(proc)) return null;
         var title = Native.WindowTitle(hwnd);
         if (proc == "explorer" && (title == "" || title == "Program Manager")) return null; // desktop / taskbar
-        return new WindowInfo(proc, title);
+        var url = readUrl && UrlBrowsers.Contains(proc) ? _urls.Get(hwnd, title) : null;
+        return new WindowInfo(proc, title, url);
     }
 
     public void ResetCache() => _names.Clear();

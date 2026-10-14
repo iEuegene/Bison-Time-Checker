@@ -85,11 +85,11 @@ public sealed class Tracker
         foreach (var (day, s, pe) in TimeUtil.SplitByDay(open.S, e))
         {
             var f = _store.LoadDay(day);
-            f.Segments.Add(new Segment { S = s, E = pe, Proc = open.Proc, Title = open.Title });
+            f.Segments.Add(new Segment { S = s, E = pe, Proc = open.Proc, Title = open.Title, Url = open.Url });
             _store.SaveDay(day, f);
         }
         var settings = _store.LoadSettings();
-        var c = Classifier.Classify(new WindowInfo(open.Proc, open.Title), settings);
+        var c = Classifier.Classify(new WindowInfo(open.Proc, open.Title, open.Url), settings);
         // A URL in some window title becomes a project only after a minute of real work there.
         if (c.AutoProject && c.Project != null && !settings.Projects.ContainsKey(c.Project)
             && (!c.AutoAfterMinute || e - open.S >= TimeUtil.Min))
@@ -135,7 +135,7 @@ public sealed class Tracker
     }
 
     string? ProjectOf(OpenSeg o) =>
-        Classifier.Classify(new WindowInfo(o.Proc, o.Title), _store.LoadSettings()).Project;
+        Classifier.Classify(new WindowInfo(o.Proc, o.Title, o.Url), _store.LoadSettings()).Project;
 
     /// <summary>
     /// One sample. <paramref name="w"/> = foreground window (null when there is none worth reading);
@@ -183,12 +183,14 @@ public sealed class Tracker
             if (_rt.Open is { } o && o.Proc == w!.Proc && o.Title == w.Title)
             {
                 o.Beat = t;
+                // The address is read in the background and may arrive a moment after the window does.
+                if (o.Url == null && w.Url != null) { o.Url = w.Url; Save(force: true); Changed?.Invoke(); return; }
                 Save();
                 return;
             }
             if (_rt.Open is { } prev) Close(prev, t, "switch");
             EndOff(t);
-            _rt.Open = new OpenSeg { S = t, Beat = t, Proc = w!.Proc, Title = w.Title };
+            _rt.Open = new OpenSeg { S = t, Beat = t, Proc = w!.Proc, Title = w.Title, Url = w.Url };
             Log("open", Where(w.Proc, w.Title));
             Save(force: true);
             Changed?.Invoke();
@@ -281,7 +283,7 @@ public sealed class Tracker
         var list = new List<Segment>(_store.LoadDay(day).Segments);
         if (_rt.Open is { } o)
             foreach (var (d, s, e) in TimeUtil.SplitByDay(o.S, Math.Max(o.S, _now())))
-                if (d == day) list.Add(new Segment { S = s, E = e, Proc = o.Proc, Title = o.Title });
+                if (d == day) list.Add(new Segment { S = s, E = e, Proc = o.Proc, Title = o.Title, Url = o.Url });
         return list;
     }
 

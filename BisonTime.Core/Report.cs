@@ -200,7 +200,7 @@ public static class Report
         }
 
         var items = segs.Where(x => x.E > x.S).OrderBy(x => x.S)
-            .Select(x => new Item { Seg = x, C = Classifier.Classify(new WindowInfo(x.Proc, x.Title), settings, idx) })
+            .Select(x => new Item { Seg = x, C = Classifier.Classify(new WindowInfo(x.Proc, x.Title, x.Url), settings, idx) })
             .Where(x => !Classifier.IsIgnored(new WindowInfo(x.Seg.Proc, x.Seg.Title), settings))
             .ToList();
         InferFromContext(items);

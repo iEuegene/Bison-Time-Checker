@@ -322,6 +322,7 @@ internal sealed class AppWindow : Window
             (UIElement)Btn(n == 1 ? "до хвилини" : $"до {n} хв", _s.RoundStep == n ? "Primary" : "Ghost", () => Save(s => s.RoundStep = n)).M(0, 0, 6, 0)).ToArray());
         var auto = Toggle(_s.Autostart, on => { Save(s => s.Autostart = on); Autostart.Apply(on); });
         var upd = Toggle(_s.AutoUpdateCheck, on => Save(s => s.AutoUpdateCheck = on));
+        var urls = Toggle(_s.ReadUrls, on => Save(s => s.ReadUrls = on));
 
         UIElement Field(string title, string help, FrameworkElement control) =>
             Cols("*,Auto", Col(3, T(title, 14, weight: FontWeights.Medium), T(help, 12, "MutedBrush", wrap: true)), control.M(16, 0, 0, 0));
@@ -330,6 +331,7 @@ internal sealed class AppWindow : Window
             Field("Простій, хв", "Без миші й клавіатури довше — облік на паузі, потім питання «додати чи викинути». Хвилини до цього моменту рахуються. Під час дзвінка (Meet, Zoom, Teams) простій не настає.", idle),
             Field("Округлення підсумку", "Лише підсумок проєкту. Проєкт за день — щонайменше 1 хв, рядки — скільки зайняли.", steps),
             Field("Запускати з Windows", "BT стартує тихо в треї після входу в систему.", auto),
+            Field("Читати адресу вкладки", "Chrome, Edge, Brave, Opera, Vivaldi: коли в заголовку немає проєкту, BT дивиться в адресний рядок. Береться лише домен (і домен клієнта з адреси Search Console, Ahrefs тощо), шлях сторінки не зберігається.", urls),
             Field("Перевіряти оновлення щодня", "Раз на добу BT питає GitHub, чи є нова версія, і показує її в треї. Оновлення ставиться лише після твого кліку.", upd),
             Field("Пауза", "Alt+Shift+P з будь-якої програми або кнопка у вікні дня. Іконка в треї стає помаранчевою.", T("Alt+Shift+P", 13, "LimeBrush", FontWeights.SemiBold)),
             Field("Завершити роботу", "Кнопка у вікні дня або в меню трею: облік зупиняється до 05:00 і вмикається сам. Іконка в треї сіра.", T("до 05:00", 13, "LimeBrush", FontWeights.SemiBold)),

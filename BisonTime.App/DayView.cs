@@ -114,7 +114,7 @@ internal sealed class DayView : Grid
         _report = Report.Build(App.Tracker.DaySegments(_day), _file.State, _settings);
         _current = null;
         if (_day == Today && App.Tracker.Open is { } o)
-            _current = Classifier.Classify(new WindowInfo(o.Proc, o.Title), _settings).Project;
+            _current = Classifier.Classify(new WindowInfo(o.Proc, o.Title, o.Url), _settings).Project;
         _off = App.Tracker.DayOff(_day);
         // Keep the dashboard in step with every edit made here.
         if (_file.Segments.Count > 0 || _day == Today)

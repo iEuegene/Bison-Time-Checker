@@ -83,7 +83,7 @@ public partial class App : Application
         var s = Store.LoadSettings();
         var idle = Native.IdleMs() >= Math.Max(1, s.IdleMin) * 60_000L;
         WindowInfo? w = null;
-        try { w = _watcher.Sample(); } catch { /* a window vanished mid-read */ }
+        try { w = _watcher.Sample(s.ReadUrls); } catch { /* a window vanished mid-read */ }
         Tracker.Tick(w, idle, _locked);
         UpdateTray();
 
@@ -215,7 +215,7 @@ public partial class App : Application
         }
         else
         {
-            var project = Tracker.Open is { } o ? Classifier.Classify(new WindowInfo(o.Proc, o.Title), Store.LoadSettings()).Project : null;
+            var project = Tracker.Open is { } o ? Classifier.Classify(new WindowInfo(o.Proc, o.Title, o.Url), Store.LoadSettings()).Project : null;
             text = project != null ? $"BT · {project}" : "BT · Інше";
         }
         if (text.Length > 63) text = text[..63];
