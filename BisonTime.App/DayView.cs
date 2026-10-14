@@ -234,23 +234,24 @@ internal sealed class DayView : Grid
             row1.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 1 && Window.GetWindow(this) is { } w) try { w.DragMove(); } catch { /* not pressed */ } };
         _head.Children.Add(row1);
 
-        // The big number is what is still to be entered; what is already in the report is said under it.
+        // The big number is the day's total for the report, always. Under it, two short facts:
+        // how much of it is already in the report and how much is still to enter.
         // A project entered and then grown counts its entered part as "in the report" and only the growth as pending.
         var entered = _report.Projects.Where(p => p.Done.Marked || p.Done.Stale).Sum(p => p.Rounded - p.Done.Diff);
         var pending = _report.Projects.Sum(p => p.Done.Marked ? 0 : p.Done.Stale ? Math.Max(0, p.Done.Diff) : p.Rounded);
-        var other = _report.OtherMs >= TimeUtil.Min ? $" · {TimeUtil.FormatExact(_report.OtherMs)} в «Іншому»" : "";
-        var size = _flyout ? 30 : 34;
-        if (entered > 0 && pending == 0)
-        {
-            _head.Children.Add(HRow(Glyph(G.Check, size * 0.7, "MintBrush"),
-                T(TimeUtil.FormatReport(entered), size, "MintBrush", FontWeights.Bold, display: true, ellipsis: false).M(10, 0, 0, 0)).M(4, 8, 0, 0));
-            _head.Children.Add(T("усе внесено у звіт" + other, 12.5, "MutedBrush").M(4, 2, 0, 0));
-        }
+        _head.Children.Add(T(TimeUtil.FormatReport(_report.DayRounded), _flyout ? 30 : 34, weight: FontWeights.Bold, display: true, ellipsis: false).M(4, 8, 0, 0));
+        static string Short(int min) => TimeUtil.FormatExact(min * TimeUtil.Min);
+        UIElement facts;
+        if (entered == 0)
+            facts = T("до звіту за день", 12.5, "MutedBrush");
+        else if (pending == 0)
+            facts = HRow(Glyph(G.Check, 12, "MintBrush"), T("усе внесено у звіт", 12.5, "MutedBrush").M(6, 0, 0, 0));
         else
-        {
-            _head.Children.Add(T(TimeUtil.FormatReport(pending), size, weight: FontWeights.Bold, display: true, ellipsis: false).M(4, 8, 0, 0));
-            _head.Children.Add(T((entered > 0 ? "ще внести" : "до звіту") + other, 12.5, "MutedBrush").M(4, 2, 0, 0));
-        }
+            facts = HRow(
+                Glyph(G.Check, 12, "MintBrush"), T($"внесено {Short(entered)}", 12.5, "MutedBrush").M(6, 0, 14, 0),
+                new Ellipse { Width = 7, Height = 7, Fill = B("LimeBrush"), VerticalAlignment = VerticalAlignment.Center },
+                T($"ще внести {Short(pending)}", 12.5, "TextBrush", FontWeights.Medium).M(6, 0, 0, 0));
+        _head.Children.Add(((FrameworkElement)facts).M(4, 4, 0, 0));
 
         if (_day != Today) return;
         UIElement buttons, status;
