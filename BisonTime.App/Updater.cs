@@ -43,11 +43,11 @@ internal static class Updater
             var json = await Http.GetStringAsync(Api + "/releases?per_page=20");
             var newest = Updates.NewestVersion(json);
             if (newest == null || !Updates.IsNewer(newest, Current)) return null;
-            throw new InvalidDataException($"Вийшла версія {newest}, але без файлів для оновлення в програмі. Завантаж її вручну: кнопка «Релізи».");
+            throw new InvalidDataException($"Вийшла версія {newest}, але з програми її не оновити. Завантаж її вручну кнопкою «Релізи».");
         }
         var signature = await Http.GetStringAsync($"{Releases}/latest/download/{Updates.SignatureName}");
         var m = Updates.ParseVerified(manifest, signature, UpdateKey.PublicKey)
-            ?? throw new InvalidDataException("Підпис оновлення не збігається. Оновлення відхилено.");
+            ?? throw new InvalidDataException("Оновлення не пройшло перевірку підпису, тому BT його не встановив.");
         if (!Updates.IsNewer(m.Version, Current)) return null;
         var changed = await Task.Run(() => Updates.Changed(m, AppDir));
         return new Available(m, changed);
@@ -59,7 +59,7 @@ internal static class Updater
         try { File.WriteAllText(probe, ""); File.Delete(probe); }
         catch (Exception)
         {
-            throw new IOException("У папку програми не можна писати (можливо, вона в Program Files). Перенеси папку BisonTimeChecker у свою теку, наприклад Документи, і запусти звідти.");
+            throw new IOException("BT не може записати файли у свою папку. Найчастіше так буває в Program Files: перенеси папку BisonTimeChecker, наприклад, у Документи й запусти звідти.");
         }
     }
 
@@ -83,7 +83,7 @@ internal static class Updater
                 {
                     bytes = await Http.GetByteArrayAsync($"{Releases}/download/v{a.Manifest.Version}/{f.Sha256}");
                 }
-                if (Updates.Sha256(bytes) != f.Sha256) throw new InvalidDataException($"Файл {f.Path} пошкоджено під час завантаження.");
+                if (Updates.Sha256(bytes) != f.Sha256) throw new InvalidDataException($"Файл {f.Path} завантажився з помилкою. Спробуй ще раз.");
                 await File.WriteAllBytesAsync(tmp, bytes);
             }
             items.Add((f, tmp));

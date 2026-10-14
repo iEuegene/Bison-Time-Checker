@@ -436,7 +436,7 @@ public static class Classifier
         if (lead.Success)
         {
             var d = NormalizeDomain(lead.Groups["d"].Value);
-            // "rozetka.com.ua — інтернет-магазин" on rozetka itself is a site naming itself, not a client:
+            // "coffee-shop.com.ua — інтернет-магазин" on that site itself is a site naming itself, not a client:
             // a new project only when the domain is named somewhere else (task manager, document, file).
             var ownSite = browser && w.Url != null && ResolveDomain(w.Url.Split(' ')[0], new Dictionary<string, string> { [d] = d }) != null;
             if (d != "" && !(ownSite && !s.Projects.ContainsKey(ResolveDomain(d, idx) ?? d)))

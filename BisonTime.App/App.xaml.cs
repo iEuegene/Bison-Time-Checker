@@ -163,7 +163,7 @@ public partial class App : Application
             if (a != null && !_balloonShown)
             {
                 _balloonShown = true;
-                _tray.ShowBalloonTip(8000, "Bison Time Checker", $"Доступна версія {a.Manifest.Version}. Оновити: Налаштування → Довідка.", WinForms.ToolTipIcon.Info);
+                _tray.ShowBalloonTip(8000, "Bison Time Checker", $"Вийшла версія {a.Manifest.Version}. Натисни, щоб оновити.", WinForms.ToolTipIcon.Info);
             }
         }
         catch (Exception ex)

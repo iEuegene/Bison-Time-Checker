@@ -15,7 +15,7 @@
     <RootNamespace>BisonTime.App</RootNamespace>
     <Product>Bison Time Checker</Product>
     <Description>Bison Time Checker (BT) — облік часу по проєктах для щоденного звіту Inweb</Description>
-    <Version>1.11.3</Version>
+    <Version>1.11.4</Version>
     <!-- Full version info: an exe without publisher metadata looks suspicious to antivirus heuristics. -->
     <Company>iEuegene</Company>
     <Authors>iEuegene</Authors>

@@ -279,7 +279,7 @@ internal sealed class DayView : Grid
         _head.Children.Add(((FrameworkElement)status).M(4, 12, 0, 0));
     }
 
-    const string FinishTip = "Зупинити облік до ранку (05:00): не треба пам'ятати зняти паузу";
+    const string FinishTip = "Облік зупиниться до 05:00 і ввімкнеться сам";
 
     static UIElement Status(string dotBrush, string text)
     {
@@ -316,7 +316,7 @@ internal sealed class DayView : Grid
         if (_report.Projects.Count == 0)
             Add(Card(Col(6,
                 T("Поки порожньо", 14, display: true, weight: FontWeights.Bold),
-                T("Відкрий документ «домен / документ / задача» або вкладку з доменом клієнта в заголовку — BT підхопить проєкт сам.", 12.5, "MutedBrush", wrap: true)), pad: 16));
+                T("Відкрий документ, задачу чи сайт клієнта, і BT сам знайде проєкт за доменом. Найточніше працює назва документа «домен / документ / задача».", 12.5, "MutedBrush", wrap: true)), pad: 16));
         Add(OffLine(), 8);
         Add(Other(), 12);
         if (_report.Projects.Any(p => p.Rounded > 0))
@@ -339,8 +339,8 @@ internal sealed class DayView : Grid
     {
         var min = (int)Math.Round((it.E - it.S) / (double)TimeUtil.Min);
         var msg = new TextBlock { FontFamily = TextFont, FontSize = 13.5, Foreground = B("TextBrush"), TextWrapping = TextWrapping.Wrap };
-        msg.Inlines.Add(new System.Windows.Documents.Run($"{min} хв простою") { FontWeight = FontWeights.SemiBold });
-        msg.Inlines.Add(new System.Windows.Documents.Run($" о {TimeUtil.Clock(it.S)}. Додати до проєкту?"));
+        msg.Inlines.Add(new System.Windows.Documents.Run($"{min} хв без миші й клавіатури") { FontWeight = FontWeights.SemiBold });
+        msg.Inlines.Add(new System.Windows.Documents.Run($" о {TimeUtil.Clock(it.S)}. Додати їх до проєкту?"));
         void AddTo(string project) => UpdateDay(st =>
         {
             st.Idle.RemoveAll(x => x.Id == it.Id);
@@ -350,7 +350,7 @@ internal sealed class DayView : Grid
             ? Btn($"До {it.Project}", "Primary", () => AddTo(it.Project!))
             : Picker("Додати до…", "Primary", ProjectNames(), AddTo);
         var other = it.Project != null ? Picker("Інший…", "Ghost", ProjectNames(), AddTo).M(6, 0, 0, 0) : null;
-        var drop = Btn("Викинути", "Quiet", () => UpdateDay(st => st.Idle.RemoveAll(x => x.Id == it.Id))).M(6, 0, 0, 0);
+        var drop = Btn("Не додавати", "Quiet", () => UpdateDay(st => st.Idle.RemoveAll(x => x.Id == it.Id))).M(6, 0, 0, 0);
         return Card(Col(10, msg, HRow(add, other, drop)), "CardBrush", "OrangeBrush", 14);
     }
 
@@ -384,7 +384,7 @@ internal sealed class DayView : Grid
         if (p.Rounded == 0 && p.ExactMs > 0 && !p.Done.Marked)
         {
             time = Chip(TimeUtil.FormatExact(p.ExactMs), lime: false);
-            tip = $"Менше половини кроку округлення: у звіт поки йде 0. Лаймовою плашка стане від {(_settings.RoundStep + 1) / 2} хв.";
+            tip = $"Поки що це округлюється до 0. З {(_settings.RoundStep + 1) / 2} хв час піде у звіт.";
         }
         var subText = T(sub, 12, "FaintBrush");
         if (tip != null && time is FrameworkElement te) te.ToolTip = tip;
@@ -422,7 +422,7 @@ internal sealed class DayView : Grid
                     foreach (var r in g.Rows) detail.Children.Add(RowEl(r));
                 }
             detail.Children.Add(Cols("*,Auto",
-                T($"До округлення {TimeUtil.FormatExact(p.ExactMs)}", 12, "FaintBrush"),
+                T($"Точно: {TimeUtil.FormatExact(p.ExactMs)}", 12, "FaintBrush"),
                 HRow(Btn("+5 хв", "Tonal", () => AddManual(p.Name, 5)), Btn("+15 хв", "Tonal", () => AddManual(p.Name, 15)).M(6, 0, 0, 0))).M(0, 10, 0, 0));
             detail.Children.Add(CommentBox(p).M(0, 12, 0, 0));
             box.Children.Add(detail);
@@ -446,7 +446,7 @@ internal sealed class DayView : Grid
         var key = r.Key;
         var sw = Toggle(!r.Disabled, on => UpdateDay(st => { if (on) st.Disabled.Remove(key); else st.Disabled[key] = true; }),
             r.Disabled ? "Не враховується" : "Враховується");
-        var whatBox = new Border { Background = Brushes.Transparent, Child = what, ToolTip = r.Pieces.Count > 0 ? "Клік — коли саме" : null };
+        var whatBox = new Border { Background = Brushes.Transparent, Child = what, ToolTip = r.Pieces.Count > 0 ? "Показати, коли саме" : null };
         if (r.Pieces.Count > 0) Clickable(whatBox, () => { _openRow = _openRow == key ? null : key; Render(); }, "row:" + key, r.Label);
         UIElement durEl = badge != null ? HRow(dur, Chip(badge).M(6, 0, 0, 0)) : dur;
         // "+5 хв" by mistake or a wrong move: these rows go away entirely (with undo), not only switch off.
@@ -511,7 +511,7 @@ internal sealed class DayView : Grid
             _commentSave.Start();
         };
         UIElement hint = c.Stale
-            ? HRow(T("є нове · ", 12, "OrangeBrush"), Btn("оновити", "Quiet", () => UpdateDay(st => { st.Comments.Remove(name); st.CommentBase.Remove(name); })))
+            ? HRow(T("з'явилося нове · ", 12, "OrangeBrush"), Btn("оновити", "Quiet", () => UpdateDay(st => { st.Comments.Remove(name); st.CommentBase.Remove(name); })))
             : T(c.Edited ? "відредаговано" : "чернетка коментаря", 12, "FaintBrush");
         var copy = IconBtn(G.Copy, () => { try { Clipboard.SetText(box.Text ?? ""); } catch { /* clipboard busy */ } }, "Копіювати коментар", 14);
         var done = p.Done.Marked;
@@ -538,8 +538,8 @@ internal sealed class DayView : Grid
                 }));
                 Render();
             }
-        }, "Позначити, що час уже перенесено у звіт: проєкт стане сірим і опуститься вниз");
-        return Col(8, WithHint(box, "Що зроблено — допиши, що BT не бачить"), Cols("*,Auto,Auto", hint, copy, mark.M(6, 0, 0, 0)));
+        }, "Познач, коли переніс час у звіт. Проєкт посірішає й опуститься вниз.");
+        return Col(8, WithHint(box, "Що зроблено? Допиши те, чого BT не бачить"), Cols("*,Auto,Auto", hint, copy, mark.M(6, 0, 0, 0)));
     }
 
     /// <summary>All projects of the day as text for the report: time and comment per line.</summary>
@@ -592,7 +592,7 @@ internal sealed class DayView : Grid
             if (_chrono) Chronology(list);
             else
             {
-                list.Children.Add(T("Найбільше часу зверху. У звіт не йде, поки не перенесеш у проєкт.", 12, "FaintBrush", wrap: true).M(0, 0, 0, 6));
+                list.Children.Add(T("Зверху те, що забрало найбільше часу. У звіт потрапить лише те, що перенесеш у проєкт.", 12, "FaintBrush", wrap: true).M(0, 0, 0, 6));
                 foreach (var a in _report.OtherApps) list.Children.Add(OtherAppEl(a));
             }
             panel.Children.Add(list);
@@ -708,19 +708,19 @@ internal sealed class DayView : Grid
         {
             var match = Classifier.UrlRulePrefix + a;
             if (!_settings.Rules.Any(r => string.Equals(r.Match, match, StringComparison.OrdinalIgnoreCase)))
-                _ruleHint = (match, $"Адреса {Classifier.DescribeAnchor(a)}", project);
+                _ruleHint = (match, $"Завжди відносити {Classifier.DescribeAnchor(a)} до {project}?", project);
             return;
         }
         if (moved.Count < 2) return;
         var fragment = Classifier.CommonFragment(moved.Select(t => t.Label));
         if (fragment != null && !_settings.Rules.Any(r => string.Equals(r.Match, fragment, StringComparison.OrdinalIgnoreCase)))
-            _ruleHint = (fragment, $"У заголовках було «{fragment}»", project);
+            _ruleHint = (fragment, $"У заголовках було «{fragment}». Завжди відносити такі вікна до {project}?", project);
     }
 
     UIElement? RuleHint()
     {
         if (_ruleHint is not { } h) return null;
-        var text = T($"{h.Text}. Завжди відносити такі вікна до {h.Project}?", 12.5, wrap: true);
+        var text = T(h.Text, 12.5, wrap: true);
         var yes = Btn("Створити правило", "Primary", () =>
         {
             _ruleHint = null;
@@ -839,7 +839,7 @@ internal sealed class DayView : Grid
                 {
                     if (all) _sel.ExceptWith(free); else _sel.UnionWith(free);
                     Render();
-                }, "Разом з короткими: потім «→ Проєкт» угорі"));
+                }, "Разом із короткими. Далі натисни «→ Проєкт» угорі."));
             }
             if (hidden > 0 || _showShort)
                 foot.Children.Add(Btn(_showShort ? "сховати короткі" : $"ще {hidden} коротких (<1 хв)", "Quiet", () => { _showShort = !_showShort; Render(); }));

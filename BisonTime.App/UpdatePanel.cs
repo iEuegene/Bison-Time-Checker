@@ -60,7 +60,7 @@ internal sealed class UpdatePanel : ContentControl
         try
         {
             await Updater.InstallAsync(a, m => Dispatcher.Invoke(() => { _message = m; Build(); }));
-            _message = "Готово. Перезапуск…";
+            _message = "Готово, перезапускаю…";
             Build();
             Updater.Restart();
         }
@@ -92,7 +92,7 @@ internal sealed class UpdatePanel : ContentControl
                 action = Btn("Перевірити ще раз", "Ghost", Check);
                 break;
             case Stage.Available when a != null:
-                status = $"Доступна версія {a.Manifest.Version}. Завантажаться лише змінені файли: {a.Changed.Count} шт., {Updater.Size(a.Bytes)}. Дані й налаштування не зачіпаються.";
+                status = $"Вийшла версія {a.Manifest.Version}. Завантажиться лише те, що змінилося ({a.Changed.Count} файлів, {Updater.Size(a.Bytes)}). Твої дані й налаштування залишаться.";
                 brush = "TextBrush";
                 action = Btn($"Оновити до {a.Manifest.Version}", "Primary", Install);
                 break;
@@ -107,7 +107,7 @@ internal sealed class UpdatePanel : ContentControl
                 action = Btn("Спробувати ще раз", "Ghost", a != null ? Install : Check);
                 break;
             default:
-                status = $"Встановлена версія {current}. Оновлення перевіряються на GitHub.";
+                status = $"У тебе версія {current}.";
                 action = Btn("Перевірити оновлення", "Ghost", Check);
                 break;
         }

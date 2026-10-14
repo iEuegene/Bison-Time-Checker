@@ -91,7 +91,7 @@ internal sealed class DashboardView : ContentControl
         {
             _page.Children.Add(Card(Col(6,
                 T("За цей період даних немає", 15, display: true, weight: FontWeights.Bold),
-                T("Дашборд рахує дні з версії 1.4.0. Тиждень і місяць наповнюватимуться з кожним робочим днем.", 13, "MutedBrush", wrap: true)), pad: 20).M(0, 24, 0, 0));
+                T("Цифри з'являться, щойно BT порахує хоч один робочий день цього періоду.", 13, "MutedBrush", wrap: true)), pad: 20).M(0, 24, 0, 0));
             return;
         }
 
@@ -101,21 +101,21 @@ internal sealed class DashboardView : ContentControl
             Tile("Робота трекера", TimeUtil.FormatExact(sum.TrackedMs), Average(data, days)),
             Tile("Проєкти", TimeUtil.FormatExact(sum.ProjectMs), "йде у звіт", lime: true).M(14, 0, 0, 0),
             Tile("Інше", TimeUtil.FormatExact(sum.OtherMs), "поза проєктами").M(14, 0, 0, 0),
-            Tile("Частка проєктів", share.ToString("P0", Uk), "проєкти / весь час").M(14, 0, 0, 0)).M(0, 24, 0, 0));
+            Tile("Частка проєктів", share.ToString("P0", Uk), "від усього часу").M(14, 0, 0, 0)).M(0, 24, 0, 0));
 
         if (_period == Period.Day)
         {
             if (Editable(_day))
                 _page.Children.Add(HRow(Btn("Відкрити день для виправлень", "Tonal", () => _openDay(_day),
-                    "Перемикачі рядків, перенос з «Інше», +5 хв — у вікні дня")).M(0, 12, 0, 0));
+                    "Виправити час можна на сторінці «Сьогодні»")).M(0, 12, 0, 0));
         }
         else
             _page.Children.Add(DaysChart(days, data).M(0, 14, 0, 0));
 
         // programs and browser side by side
         _page.Children.Add(Cols("*,*",
-            Breakdown("Програми", "Час у кожній програмі: проєкти та «Інше» разом.", sum.Apps),
-            Breakdown("Браузер", "Вкладки за сервісом у заголовку. Адреси сторінок BT не бачить.", sum.Browser).M(12, 0, 0, 0)).M(0, 14, 0, 0));
+            Breakdown("Програми", "Скільки часу забрала кожна програма, разом з «Іншим».", sum.Apps),
+            Breakdown("Браузер", "Вкладки, згруповані за сервісом: Google Docs, Planfix, YouTube тощо.", sum.Browser).M(12, 0, 0, 0)).M(0, 14, 0, 0));
 
         // projects
         _page.Children.Add(ProjectsCard(sum).M(0, 14, 0, 0));
@@ -207,7 +207,7 @@ internal sealed class DashboardView : ContentControl
             grid.Children.Add(col);
         }
         var legend = HRow(Swatch(B("LimeBrush")), T("Проєкти", 12, "MutedBrush").M(6, 0, 16, 0), Swatch(B("TonalBrush")), T("Інше", 12, "MutedBrush").M(6, 0, 0, 0));
-        return Card(Col(12, Cols("*,Auto", Col(2, T("По днях", 15, weight: FontWeights.SemiBold), T("Клік по дню — відкрити для виправлень (останні 7 днів)", 12, "FaintBrush")), legend), grid), pad: 20);
+        return Card(Col(12, Cols("*,Auto", Col(2, T("По днях", 15, weight: FontWeights.SemiBold), T("Клікни день, щоб виправити його (останні 7 днів)", 12, "FaintBrush")), legend), grid), pad: 20);
     }
 
     static Border Swatch(Brush b) => new() { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = b, VerticalAlignment = VerticalAlignment.Center };
@@ -286,7 +286,7 @@ internal sealed class DashboardView : ContentControl
     static FrameworkElement ProjectsCard(DayStats sum)
     {
         var head = Col(2, T("Проєкти", 15, weight: FontWeights.SemiBold),
-            T("Точний час до округлення. Округлений підсумок для звіту — на сторінці «Сьогодні».", 12, "FaintBrush", wrap: true));
+            T("Точний час, без округлення.", 12, "FaintBrush", wrap: true));
         var items = sum.Projects.Where(x => x.Value > 0).OrderByDescending(x => x.Value).ToList();
         if (items.Count == 0) return Card(Col(12, head, T("Часу на проєктах немає", 13, "MutedBrush")), pad: 20);
         var max = items[0].Value;

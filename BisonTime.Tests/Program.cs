@@ -517,7 +517,7 @@ Test("same title, another site in the address: a new segment", () =>
 Test("a site naming itself does not become a client", () =>
 {
     var s = S();
-    Eq(null, Classifier.Classify(new WindowInfo("chrome", "rozetka.com.ua — інтернет-магазин - Google Chrome", "rozetka.com.ua"), s).Project);
+    Eq(null, Classifier.Classify(new WindowInfo("chrome", "coffee-shop.com.ua — інтернет-магазин - Google Chrome", "coffee-shop.com.ua"), s).Project);
     var task = Classifier.Classify(new WindowInfo("chrome", "newclient.ua - SEO-комплекс - Planfix - Google Chrome", "inweb.planfix.com"), s);
     Eq("newclient.ua", task.Project); True(task.AutoProject, "a task names a new client");
     Eq("newclient.ua", Classifier.Classify(new WindowInfo("chrome", "newclient.ua - SEO-комплекс - Google Chrome"), s).Project);   // no address known: as before

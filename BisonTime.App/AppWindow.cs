@@ -239,8 +239,8 @@ internal sealed class AppWindow : Window
 
     void ProjectsPage()
     {
-        H1("Проєкти", "Проєкт = домен клієнта, як у формі звіту. Нові проєкти з'являються самі: з назв документів «домен / документ / задача» " +
-            "і з задач Planfix, що починаються з домену. Псевдоніми зливають кілька доменів в один проєкт: старий домен після міграції, мовні версії.");
+        H1("Проєкти", "Кожен проєкт — це домен клієнта, як у формі звіту. Нових клієнтів BT додає сам, коли бачить їхній домен у назві документа чи задачі. " +
+            "Якщо в клієнта кілька доменів (старий після переїзду, мовні версії), впиши їх в інші домени, і час збереться в один проєкт.");
         var names = _s.Projects.Keys.OrderBy(n => n == "Inweb").ThenBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
         var items = names.Select(n =>
         {
@@ -256,14 +256,14 @@ internal sealed class AppWindow : Window
                 aliases.LostFocus += (_, _) => Save(s =>
                     s.Projects[n].Aliases = aliases.Text.Split(',').Select(x => Classifier.NormalizeDomain(x) is { Length: > 0 } d ? d : x.Trim())
                         .Where(x => x != "").Distinct().ToList());
-                below = WithHint(aliases, "псевдоніми через кому: old-domain.com.ua, site.lv");
+                below = WithHint(aliases, "інші домени клієнта через кому: old-shop.com.ua, shop.lv");
             }
             return (UIElement)Cols("*,Auto,Auto",
                 Col(6, title, below),
                 Btn(p.Archived ? "Повернути" : "В архів", "Quiet", () => Save(s => s.Projects[n].Archived = !p.Archived)).M(10, 0, 0, 0),
                 Confirm("Видалити", () => Save(s => { s.Projects.Remove(n); s.Rules.RemoveAll(r => r.Project == n); }), $"Так, видалити {n}"));
         });
-        _page.Children.Add(ListCard(items, "Ще немає проєктів."));
+        _page.Children.Add(ListCard(items, "Проєктів поки немає. Вони з'являться самі, щойно BT побачить домен клієнта."));
         _page.Children.Add(AddRow("домен клієнта (shop.com.ua) або назва внутрішнього проєкту", "Додати проєкт", v =>
         {
             var d = Classifier.NormalizeDomain(v);
@@ -279,13 +279,13 @@ internal sealed class AppWindow : Window
 
     void RulesPage()
     {
-        H1("Правила", "Коли домену клієнта немає в заголовку вікна. Фрагмент заголовка («Looker Studio», «Звіт Ahrefs») або назва програми " +
-            "(figma, excel) → проєкт. Правило за заголовком перевіряється першим; правило на всю програму поступається домену клієнта в заголовку.");
+        H1("Правила", "Для вікон, у заголовку яких немає домену клієнта. Вкажи слово із заголовка («Looker Studio») або програму (figma), " +
+            "і BT відноситиме такі вікна до вибраного проєкту. Правила за адресою вкладки з'являються тут, коли ти погоджуєшся на пропозицію після перенесення.");
         var items = _s.Rules.Select((r, i) => (UIElement)Cols("*,Auto",
             Col(2, T(r.Match.StartsWith(Classifier.UrlRulePrefix) ? "Адреса: " + Classifier.DescribeAnchor(r.Match[Classifier.UrlRulePrefix.Length..]) : r.Match,
                 13, weight: FontWeights.SemiBold), T($"→ {r.Project}", 12, "MutedBrush")),
             Btn("Видалити", "Quiet", () => Save(s => s.Rules.RemoveAt(i)))));
-        _page.Children.Add(ListCard(items, "Правил немає."));
+        _page.Children.Add(ListCard(items, "Правил поки немає."));
 
         var chosen = "";
         Button? pick = null;
@@ -294,7 +294,7 @@ internal sealed class AppWindow : Window
             chosen = v;
             pick!.Content = new TextBlock { Text = v, FontFamily = TextFont };
         });
-        _page.Children.Add(AddRow("фрагмент заголовка або програма (figma)", "Додати правило",
+        _page.Children.Add(AddRow("слово із заголовка або програма (figma)", "Додати правило",
             v =>
             {
                 if (chosen != "") { Save(s => s.Rules.Add(new Rule { Match = v, Project = chosen })); return; }
@@ -303,12 +303,12 @@ internal sealed class AppWindow : Window
                 pick.BorderBrush = B("OrangeBrush");
             }, pick));
 
-        H2("Таск-менеджери", "Фрагменти заголовка, за якими BT впізнає таск-менеджер. Задача з доменом клієнта в назві йде в цей проєкт; " +
-            "сторінка без нього (планувальник, списки) — у проєкт, над яким ти працював у межах 15 хв до або після.");
+        H2("Таск-менеджери", "Слова в заголовку, за якими BT впізнає таск-менеджер. Задача з доменом клієнта в назві йде в його проєкт, " +
+            "а сторінки без домену (планувальник, списки) — у проєкт, з яким ти працював за 15 хвилин до чи після.");
         ListEditor(_s.WorkTools, "Planfix", "Список порожній.", (s, list) => s.WorkTools = list);
 
-        H2("Ігнор", "Що BT не записує взагалі: програма (telegram, spotify) або фрагмент заголовка (YouTube, Rozetka). " +
-            "Перевіряється за входженням, без урахування регістру.");
+        H2("Ігнор", "Програми й сторінки, які BT не записує зовсім. Впиши назву програми (telegram) або слово із заголовка (YouTube); " +
+            "великі й малі літери не важливі.");
         ListEditor(_s.Ignore, "telegram або YouTube", "Список порожній.", (s, list) => s.Ignore = list);
     }
 
@@ -322,7 +322,7 @@ internal sealed class AppWindow : Window
 
     void TrackingPage()
     {
-        H1("Облік", "Коли BT ставить облік на паузу, як округлює підсумок і де лежать дані.");
+        H1("Облік", "Коли BT зупиняє облік, як округлює час і де зберігає дані.");
         // Stepper instead of a text box: the number reads at a glance and cannot be typed wrong.
         var minus = IconBtn("\uE738", () => Save(s => s.IdleMin = Math.Max(1, s.IdleMin - 1)), "Менше на 1 хв", 13);
         var plus = IconBtn(G.Add, () => Save(s => s.IdleMin = Math.Min(30, s.IdleMin + 1)), "Більше на 1 хв", 13);
@@ -349,16 +349,16 @@ internal sealed class AppWindow : Window
         }
         _page.Children.Add(ListCard(new[]
         {
-            Field("Простій", "Без миші й клавіатури довше — облік на паузі, потім питання «додати чи викинути». Хвилини до цього моменту рахуються. Під час дзвінка (Meet, Zoom, Teams) простій не настає.", idle),
-            Field("Округлення підсумку", "Лише підсумок проєкту. Проєкт за день — щонайменше 1 хв, рядки — скільки зайняли.", steps),
-            Field("Запускати з Windows", "BT стартує тихо в треї після входу в систему.", auto),
-            Field("Читати адресу вкладки", "Chrome, Edge, Brave, Opera, Vivaldi: коли в заголовку немає проєкту, BT дивиться в адресний рядок. Береться лише домен (і домен клієнта з адреси Search Console, Ahrefs тощо), шлях сторінки не зберігається.", urls),
-            Field("Перевіряти оновлення щодня", "Раз на добу BT питає GitHub, чи є нова версія, і показує її в треї. Оновлення ставиться лише після твого кліку.", upd),
-            Field("Пауза", "Alt+Shift+P з будь-якої програми або кнопка у вікні дня. Іконка в треї стає помаранчевою.", T("Alt+Shift+P", 13, "MutedBrush", FontWeights.SemiBold)),
-            Field("Завершити роботу", "Кнопка у вікні дня або в меню трею: облік зупиняється до 05:00 і вмикається сам. Іконка в треї сіра.", T("до 05:00", 13, "MutedBrush", FontWeights.SemiBold)),
+            Field("Простій", "Якщо стільки хвилин не торкаєшся миші й клавіатури, облік зупиняється, а потім BT питає, чи додати цей час. Хвилини до зупинки зараховуються. Під час дзвінка в Meet, Zoom чи Teams облік не зупиняється.", idle),
+            Field("Округлення", "Округлюється тільки підсумок проєкту за день, як у формі звіту. Рядки показують точний час.", steps),
+            Field("Запускати з Windows", "BT тихо з'являється в треї, щойно ти входиш у Windows.", auto),
+            Field("Читати адресу вкладки", "Коли в заголовку вкладки немає проєкту, BT дивиться в адресний рядок Chrome, Edge, Brave, Opera чи Vivaldi. Зберігається лише домен, адреса сторінки — ні.", urls),
+            Field("Перевіряти оновлення щодня", "Раз на день BT дивиться на GitHub, чи вийшла нова версія, і повідомляє в треї. Встановиться вона, лише коли ти натиснеш «Оновити».", upd),
+            Field("Пауза", "Кнопка у вікні дня або Alt+Shift+P з будь-якої програми. Поки пауза, іконка в треї помаранчева.", T("Alt+Shift+P", 13, "MutedBrush", FontWeights.SemiBold)),
+            Field("Завершити роботу", "Зупиняє облік до ранку: о 05:00 BT увімкнеться сам. Іконка в треї стає сірою.", T("до 05:00", 13, "MutedBrush", FontWeights.SemiBold)),
         }, ""));
 
-        H2("Дані", "Усе лежить у папці BisonTime в AppData цього користувача: файл на день, налаштування, журнал. Сирі записи вікон зберігаються 7 днів, дні — 30, цифри для дашборда без назв вікон — рік.");
+        H2("Дані", "Усе зберігається тільки на цьому комп'ютері, у твоїй папці AppData\\BisonTime. Назви вікон BT тримає 7 днів, коментарі й позначки — 30, а цифри для дашборда (без назв) — рік.");
         var status = T("", 13, "MintBrush", wrap: true);
         _page.Children.Add(HRow(
             Btn("Відкрити папку з даними", "Primary", () => App.OpenFolder(App.Store.Dir)),
@@ -366,9 +366,9 @@ internal sealed class AppWindow : Window
             {
                 var lines = App.Store.RecentLog().Select(x =>
                     string.Join(' ', new[] { TimeUtil.Local(x.T).ToString("HH:mm:ss"), x.Ev, x.Where, x.Why, x.Sec is { } s ? $"{s}s" : null }.Where(y => !string.IsNullOrEmpty(y))));
-                try { Clipboard.SetText(string.Join(Environment.NewLine, lines)); status.Text = "Журнал скопійовано: надішли його розробнику, якщо час рахується дивно."; }
+                try { Clipboard.SetText(string.Join(Environment.NewLine, lines)); status.Text = "Журнал скопійовано. Надішли його розробнику, якщо час рахується дивно."; }
                 catch { status.Text = "Буфер обміну зайнятий, спробуй ще раз."; }
-            }, "Останні 400 подій трекера: програма й початок заголовка, без повних назв").M(8, 0, 0, 0)));
+            }, "Останні 400 подій: програма й початок заголовка, без повних назв").M(8, 0, 0, 0)));
         _page.Children.Add(status.M(0, 10, 0, 0));
         H2("Очистити історію", "Видаляє всі записи часу, коментарі та позначки. Проєкти, правила й ігнор лишаються.");
         _page.Children.Add(Confirm("Очистити історію", () =>
@@ -428,12 +428,12 @@ internal sealed class AppWindow : Window
             _update ??= new UpdatePanel(),
         }, ""));
 
-        H2("Що нового", "Кожна версія одним рядком.");
+        H2("Що нового", "Коротко про кожну версію.");
         _page.Children.Add(ListCard(HelpContent.Changes.Select(c =>
             (UIElement)Cols("70,*", T(c.Version, 13, "MutedBrush", FontWeights.SemiBold), T(c.Text, 13, wrap: true))), ""));
 
         H2("Правова інформація", "");
         foreach (var line in HelpContent.Legal) _page.Children.Add(T(line, 12.5, "MutedBrush", wrap: true).M(0, 0, 0, 8));
-        _page.Children.Add(T("Усе зберігається лише на цьому комп'ютері. В інтернет BT ходить лише по оновлення на GitHub і нічого не надсилає.", 12.5, "FaintBrush", wrap: true).M(0, 8, 0, 0));
+        _page.Children.Add(T("Усе зберігається тільки на цьому комп'ютері. В інтернет BT виходить лише перевірити оновлення на GitHub і нічого туди не надсилає.", 12.5, "FaintBrush", wrap: true).M(0, 8, 0, 0));
     }
 }
