@@ -153,7 +153,7 @@ internal sealed class DashboardView : ContentControl
         {
             var (p, title) = items[i];
             var on = p == _period;
-            var content = HRow(on ? Glyph(G.Check, 12, "LimeBrush").M(0, 0, 6, 0) : null, T(title, 13.5, on ? "LimeBrush" : "TextBrush", FontWeights.Medium));
+            var content = HRow(on ? Glyph(G.Check, 12, "TextBrush").M(0, 0, 6, 0) : null, T(title, 13.5, "TextBrush", on ? FontWeights.SemiBold : FontWeights.Medium));
             var n = items.Count();
             var seg = new Border
             {

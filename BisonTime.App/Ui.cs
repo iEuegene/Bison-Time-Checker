@@ -131,11 +131,11 @@ internal static class Ui
         return new Border
         {
             Width = 36, Height = 36, CornerRadius = new CornerRadius(12),
-            Background = B(active ? "LimeBrush" : "TonalBrush"), VerticalAlignment = VerticalAlignment.Center,
+            Background = B(active ? "MintBrush" : "TonalBrush"), VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
             {
                 Text = letters, FontFamily = Display, FontSize = 11.5, FontWeight = FontWeights.Bold,
-                Foreground = B(active ? "GreenBrush" : "LimeBrush"),
+                Foreground = B(active ? "GreenBrush" : "MutedBrush"),
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             },
         };

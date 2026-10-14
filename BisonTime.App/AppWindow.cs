@@ -205,7 +205,8 @@ internal sealed class AppWindow : Window
     }
 
     /// <summary>"Видалити" that asks "Точно?" first instead of a modal dialog.</summary>
-    static Button Confirm(string label, Action action)
+    /// <summary>Two-step button for the irreversible: the second press names what goes ("Так, видалити shop.com.ua").</summary>
+    static Button Confirm(string label, Action action, string? armedText = null)
     {
         Button? b = null;
         var armed = false;
@@ -213,7 +214,7 @@ internal sealed class AppWindow : Window
         {
             if (armed) { action(); return; }
             armed = true;
-            b!.Content = T("Точно?", 12, "OrangeBrush", FontWeights.SemiBold);
+            b!.Content = T(armedText ?? "Точно?", 12.5, "OrangeBrush", FontWeights.SemiBold);
             var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
             t.Tick += (_, _) => { t.Stop(); armed = false; b.Content = T(label, 12, "MutedBrush"); };
             t.Start();
@@ -255,7 +256,7 @@ internal sealed class AppWindow : Window
             return (UIElement)Cols("*,Auto,Auto",
                 Col(6, title, below),
                 Btn(p.Archived ? "Повернути" : "В архів", "Quiet", () => Save(s => s.Projects[n].Archived = !p.Archived)).M(10, 0, 0, 0),
-                Confirm("Видалити", () => Save(s => { s.Projects.Remove(n); s.Rules.RemoveAll(r => r.Project == n); })));
+                Confirm("Видалити", () => Save(s => { s.Projects.Remove(n); s.Rules.RemoveAll(r => r.Project == n); }), $"Так, видалити {n}"));
         });
         _page.Children.Add(ListCard(items, "Ще немає проєктів."));
         _page.Children.Add(AddRow("домен клієнта (shop.com.ua) або назва внутрішнього проєкту", "Додати проєкт", v =>
@@ -311,13 +312,18 @@ internal sealed class AppWindow : Window
     void TrackingPage()
     {
         H1("Облік", "Коли BT ставить облік на паузу, як округлює підсумок і де лежать дані.");
-        var idle = Input(_s.IdleMin.ToString());
-        idle.Width = 70;
-        idle.TextAlignment = TextAlignment.Right;
-        idle.LostFocus += (_, _) =>
+        // Stepper instead of a text box: the number reads at a glance and cannot be typed wrong.
+        var minus = IconBtn("\uE738", () => Save(s => s.IdleMin = Math.Max(1, s.IdleMin - 1)), "Менше на 1 хв", 13);
+        var plus = IconBtn(G.Add, () => Save(s => s.IdleMin = Math.Min(30, s.IdleMin + 1)), "Більше на 1 хв", 13);
+        minus.IsEnabled = _s.IdleMin > 1;
+        plus.IsEnabled = _s.IdleMin < 30;
+        var value = T($"{_s.IdleMin} хв", 15, weight: FontWeights.SemiBold, ellipsis: false);
+        value.MinWidth = 52;
+        value.TextAlignment = TextAlignment.Center;
+        var idle = new Border
         {
-            if (int.TryParse(idle.Text, out var v)) Save(s => s.IdleMin = Math.Clamp(v, 1, 30));
-            else idle.Text = _s.IdleMin.ToString();
+            BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(20),
+            Padding = new Thickness(2), VerticalAlignment = VerticalAlignment.Center, Child = HRow(minus, value, plus),
         };
         var steps = HRow(new[] { 1, 5, 10, 15 }.Select(n =>
             (UIElement)Btn(n == 1 ? "до хвилини" : $"до {n} хв", _s.RoundStep == n ? "Primary" : "Ghost", () => Save(s => s.RoundStep = n)).M(0, 0, 6, 0)).ToArray());
@@ -325,21 +331,24 @@ internal sealed class AppWindow : Window
         var upd = Toggle(_s.AutoUpdateCheck, on => Save(s => s.AutoUpdateCheck = on));
         var urls = Toggle(_s.ReadUrls, on => Save(s => s.ReadUrls = on));
 
-        UIElement Field(string title, string help, FrameworkElement control) =>
-            Cols("*,Auto", Col(3, T(title, 14, weight: FontWeights.Medium), T(help, 12, "MutedBrush", wrap: true)), control.M(16, 0, 0, 0));
+        UIElement Field(string title, string help, FrameworkElement control)
+        {
+            control.VerticalAlignment = VerticalAlignment.Center;   // never stretch to the height of a long description
+            return Cols("*,Auto", Col(3, T(title, 14, weight: FontWeights.Medium), T(help, 12, "MutedBrush", wrap: true)), control.M(16, 0, 0, 0));
+        }
         _page.Children.Add(ListCard(new[]
         {
-            Field("Простій, хв", "Без миші й клавіатури довше — облік на паузі, потім питання «додати чи викинути». Хвилини до цього моменту рахуються. Під час дзвінка (Meet, Zoom, Teams) простій не настає.", idle),
+            Field("Простій", "Без миші й клавіатури довше — облік на паузі, потім питання «додати чи викинути». Хвилини до цього моменту рахуються. Під час дзвінка (Meet, Zoom, Teams) простій не настає.", idle),
             Field("Округлення підсумку", "Лише підсумок проєкту. Проєкт за день — щонайменше 1 хв, рядки — скільки зайняли.", steps),
             Field("Запускати з Windows", "BT стартує тихо в треї після входу в систему.", auto),
             Field("Читати адресу вкладки", "Chrome, Edge, Brave, Opera, Vivaldi: коли в заголовку немає проєкту, BT дивиться в адресний рядок. Береться лише домен (і домен клієнта з адреси Search Console, Ahrefs тощо), шлях сторінки не зберігається.", urls),
             Field("Перевіряти оновлення щодня", "Раз на добу BT питає GitHub, чи є нова версія, і показує її в треї. Оновлення ставиться лише після твого кліку.", upd),
-            Field("Пауза", "Alt+Shift+P з будь-якої програми або кнопка у вікні дня. Іконка в треї стає помаранчевою.", T("Alt+Shift+P", 13, "LimeBrush", FontWeights.SemiBold)),
-            Field("Завершити роботу", "Кнопка у вікні дня або в меню трею: облік зупиняється до 05:00 і вмикається сам. Іконка в треї сіра.", T("до 05:00", 13, "LimeBrush", FontWeights.SemiBold)),
+            Field("Пауза", "Alt+Shift+P з будь-якої програми або кнопка у вікні дня. Іконка в треї стає помаранчевою.", T("Alt+Shift+P", 13, "MutedBrush", FontWeights.SemiBold)),
+            Field("Завершити роботу", "Кнопка у вікні дня або в меню трею: облік зупиняється до 05:00 і вмикається сам. Іконка в треї сіра.", T("до 05:00", 13, "MutedBrush", FontWeights.SemiBold)),
         }, ""));
 
         H2("Дані", "Усе лежить у папці BisonTime в AppData цього користувача: файл на день, налаштування, журнал. Сирі записи вікон зберігаються 7 днів, дні — 30, цифри для дашборда без назв вікон — рік.");
-        var status = T("", 13, "LimeBrush", wrap: true);
+        var status = T("", 13, "MintBrush", wrap: true);
         _page.Children.Add(HRow(
             Btn("Відкрити папку з даними", "Primary", () => App.OpenFolder(App.Store.Dir)),
             Btn("Копіювати журнал", "Ghost", () =>
@@ -372,8 +381,19 @@ internal sealed class AppWindow : Window
             var body = new StackPanel();
             foreach (var line in lines)
             {
+                var num = System.Text.RegularExpressions.Regex.Match(line, @"^(\d+)\. ");
                 if (line.StartsWith("• "))
-                    body.Children.Add(Cols("18,*", T("•", 13, "LimeBrush"), T(line[2..], 13, wrap: true)).M(0, 0, 0, 7));
+                    body.Children.Add(Cols("18,*", T("•", 13, "MutedBrush"), T(line[2..], 13, wrap: true)).M(0, 0, 0, 7));
+                else if (num.Success)
+                {
+                    var badge = new Border
+                    {
+                        Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = B("TonalBrush"), VerticalAlignment = VerticalAlignment.Top,
+                        Child = new TextBlock { Text = num.Groups[1].Value, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = B("TextBrush"),
+                            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontFamily = TextFont },
+                    };
+                    body.Children.Add(Cols("32,*", badge, T(line[num.Length..], 13, wrap: true).M(0, 2, 0, 0)).M(0, 0, 0, 9));
+                }
                 else
                     body.Children.Add(T(line, 13, wrap: true).M(0, 0, 0, 8));
             }
@@ -399,7 +419,7 @@ internal sealed class AppWindow : Window
 
         H2("Що нового", "Кожна версія одним рядком.");
         _page.Children.Add(ListCard(HelpContent.Changes.Select(c =>
-            (UIElement)Cols("70,*", T(c.Version, 13, "LimeBrush", FontWeights.SemiBold), T(c.Text, 13, wrap: true))), ""));
+            (UIElement)Cols("70,*", T(c.Version, 13, "MutedBrush", FontWeights.SemiBold), T(c.Text, 13, wrap: true))), ""));
 
         H2("Правова інформація", "");
         foreach (var line in HelpContent.Legal) _page.Children.Add(T(line, 12.5, "MutedBrush", wrap: true).M(0, 0, 0, 8));

@@ -88,7 +88,7 @@ internal sealed class UpdatePanel : ContentControl
                 break;
             case Stage.UpToDate:
                 status = $"У тебе остання версія ({current}).";
-                brush = "LimeBrush";
+                brush = "MintBrush";
                 action = Btn("Перевірити ще раз", "Ghost", Check);
                 break;
             case Stage.Available when a != null:

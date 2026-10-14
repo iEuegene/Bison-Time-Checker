@@ -25,6 +25,13 @@ internal sealed class DayView : Grid
     string? _openVisit;
     readonly StackPanel _head = new();
     readonly StackPanel _sticky = new();
+    readonly Border _snack = new()
+    {
+        Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(12, 0, 12, 12),
+        CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 8, 8, 8),
+        Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 4, Opacity = 0.45, Color = Colors.Black },
+    };
+    DispatcherTimer? _snackTimer;
     string? _anchor;                                         // last ticked visit: Shift+click selects up to here
     readonly StackPanel _body = new() { Margin = new Thickness(12, 12, 12, 16) };
     readonly ScrollViewer _scroll;
@@ -59,6 +66,8 @@ internal sealed class DayView : Grid
         Children.Add(headBox);
         Children.Add(_sticky);
         Children.Add(_scroll);
+        SetRow(_snack, 2);
+        Children.Add(_snack);
 
         _refresh = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _refresh.Tick += (_, _) => { if (IsVisible && !EditingText) Refresh(background: true); };
@@ -212,9 +221,23 @@ internal sealed class DayView : Grid
             row1.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 1 && Window.GetWindow(this) is { } w) try { w.DragMove(); } catch { /* not pressed */ } };
         _head.Children.Add(row1);
 
-        _head.Children.Add(T(TimeUtil.FormatReport(_report.DayRounded), _flyout ? 30 : 34, weight: FontWeights.Bold, display: true, ellipsis: false).M(4, 8, 0, 0));
-        var other = _report.OtherMs >= TimeUtil.Min ? $" · ще {TimeUtil.FormatExact(_report.OtherMs)} в «Іншому»" : "";
-        _head.Children.Add(T("до звіту" + other, 12.5, "MutedBrush").M(4, 2, 0, 0));
+        // The big number is what is still to be entered; what is already in the report is said under it.
+        var entered = _report.Projects.Where(p => p.Done.Marked).Sum(p => p.Rounded);
+        var pending = _report.Projects.Where(p => !p.Done.Marked).Sum(p => p.Rounded);
+        var other = _report.OtherMs >= TimeUtil.Min ? $" · {TimeUtil.FormatExact(_report.OtherMs)} в «Іншому»" : "";
+        var size = _flyout ? 30 : 34;
+        if (entered > 0 && pending == 0)
+        {
+            _head.Children.Add(HRow(Glyph(G.Check, size * 0.7, "MintBrush"),
+                T(TimeUtil.FormatReport(entered), size, "MintBrush", FontWeights.Bold, display: true, ellipsis: false).M(10, 0, 0, 0)).M(4, 8, 0, 0));
+            _head.Children.Add(T("усе внесено у звіт" + other, 12.5, "MutedBrush").M(4, 2, 0, 0));
+        }
+        else
+        {
+            _head.Children.Add(T(TimeUtil.FormatReport(pending), size, weight: FontWeights.Bold, display: true, ellipsis: false).M(4, 8, 0, 0));
+            var note = entered > 0 ? $"ще внести · у звіті вже {TimeUtil.FormatReport(entered)}" : "до звіту";
+            _head.Children.Add(T(note + other, 12.5, "MutedBrush").M(4, 2, 0, 0));
+        }
 
         if (_day != Today) return;
         UIElement buttons, status;
@@ -236,7 +259,7 @@ internal sealed class DayView : Grid
             buttons = HRow(
                 IconText(G.Pause, "Пауза", "Tonal", () => App.Instance.TogglePause(), "Пауза (Alt+Shift+P)"),
                 IconText(G.Stop, "Завершити роботу", "Ghost", () => App.Instance.FinishDay(), FinishTip).M(8, 0, 0, 0));
-            status = Status("LimeBrush", _current != null ? $"Облік іде · {_current}" : "Облік іде");
+            status = Status("MintBrush", _current != null ? $"Облік іде · {_current}" : "Облік іде");
         }
         _head.Children.Add(((FrameworkElement)buttons).M(0, 14, 0, 0));
         _head.Children.Add(((FrameworkElement)status).M(4, 12, 0, 0));
@@ -267,7 +290,15 @@ internal sealed class DayView : Grid
 
         Add(UpdateBar(), 10);
         foreach (var it in _file.State.Idle.ToList()) Add(IdleBanner(it), 10);
-        foreach (var p in _report.Projects) Add(ProjectItem(p), 2);
+        var toEnter = _report.Projects.Where(p => !p.Done.Marked).ToList();
+        var done = _report.Projects.Where(p => p.Done.Marked).ToList();
+        foreach (var p in toEnter) Add(ProjectItem(p), 2);
+        if (done.Count > 0)
+        {
+            Add(Cols("Auto,*,Auto", Glyph(G.Check, 12, "MintBrush"), T("Внесено у звіт", 12.5, "MutedBrush", FontWeights.SemiBold).M(8, 0, 0, 0),
+                T(TimeUtil.FormatReport(done.Sum(p => p.Rounded)), 12.5, "MutedBrush")).M(10, toEnter.Count > 0 ? 14 : 4, 10, 0), 2);
+            foreach (var p in done) Add(ProjectItem(p), 2);
+        }
         if (_report.Projects.Count == 0)
             Add(Card(Col(6,
                 T("Поки порожньо", 14, display: true, weight: FontWeights.Bold),
@@ -326,8 +357,9 @@ internal sealed class DayView : Grid
         var subText = T(sub, 12, p.Done.Stale ? "OrangeBrush" : "FaintBrush");
 
         UIElement time = p.Done.Marked
-            ? HRow(Glyph(G.Check, 12, "LimeBrush"), Chip(TimeUtil.FormatReport(p.Rounded), lime: false).M(6, 0, 0, 0))
+            ? HRow(Glyph(G.Check, 13, "MintBrush"), T(TimeUtil.FormatReport(p.Rounded), 13, "MutedBrush", FontWeights.Medium).M(6, 0, 0, 0))
             : Chip(TimeUtil.FormatReport(p.Rounded), lime: p.Rounded > 0);
+        if (p.Done.Marked) sub = "внесено у звіт";
         var head = Cols("Auto,*,Auto", Avatar(p.Name, p.Name == _current),
             Col(1, T(p.Name, 14, weight: FontWeights.SemiBold), subText).M(12, 0, 8, 0), time);
         var headBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(10, 10, 10, 10), Child = head };
@@ -352,7 +384,7 @@ internal sealed class DayView : Grid
         var card = new Border { CornerRadius = new CornerRadius(16), Background = open ? B("CardBrush") : Brushes.Transparent, Child = box };
         if (!open) card.MouseEnter += (_, _) => card.Background = B("CardHiBrush");
         if (!open) card.MouseLeave += (_, _) => card.Background = Brushes.Transparent;
-        if ((p.Rounded == 0 || p.Done.Marked) && !open) card.Opacity = 0.7;
+        if ((p.Rounded == 0 || p.Done.Marked) && !open) card.Opacity = p.Done.Marked ? 0.6 : 0.75;
         return card;
     }
 
@@ -380,7 +412,7 @@ internal sealed class DayView : Grid
             pieces.Children.Add(Cols("*,Auto",
                 T($"{TimeUtil.Clock(x.S)} – {TimeUtil.Clock(x.E)}", 12, "MutedBrush"),
                 T(TimeUtil.FormatExact(x.Ms), 12, "FaintBrush")).M(0, 2, 0, 2));
-        var box = new Border { BorderBrush = B("LimeBrush"), BorderThickness = new Thickness(2, 0, 0, 0), Child = pieces, Margin = new Thickness(2, 0, 0, 0) };
+        var box = new Border { BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(2, 0, 0, 0), Child = pieces, Margin = new Thickness(2, 0, 0, 0) };
         return Col(0, line, box);
     }
 
@@ -412,10 +444,21 @@ internal sealed class DayView : Grid
             : T(c.Edited ? "відредаговано" : "чернетка коментаря", 12, "FaintBrush");
         var copy = IconBtn(G.Copy, () => { try { Clipboard.SetText(box.Text ?? ""); } catch { /* clipboard busy */ } }, "Копіювати коментар", 14);
         var done = p.Done.Marked;
-        var mark = Btn(done ? "Внесено ✓" : "Внесено", done ? "Tonal" : "Primary", () => UpdateDay(st =>
+        var label = done ? "Скасувати «Внесено»" : p.Done.Stale ? "Внесено ще раз" : "Внесено у звіт";
+        var mark = Btn(label, done ? "Quiet" : "Primary", () =>
         {
-            if (done) st.Done.Remove(name); else st.Done[name] = p.Rounded;
-        }), "Позначити, що час уже перенесено у звіт");
+            var before = App.Store.LoadDay(_day).State.Done.TryGetValue(name, out var b) ? b : (int?)null;
+            UpdateDay(st => { if (done) st.Done.Remove(name); else st.Done[name] = p.Rounded; });
+            if (!done)
+            {
+                _open.Remove(name);   // it moves down to "Внесено у звіт"
+                Snack($"{name}: {TimeUtil.FormatReport(p.Rounded)} внесено у звіт", () => UpdateDay(st =>
+                {
+                    if (before is { } v) st.Done[name] = v; else st.Done.Remove(name);
+                }));
+                Render();
+            }
+        }, "Позначити, що час уже перенесено у звіт: проєкт стане сірим і опуститься вниз");
         return Col(8, WithHint(box, "Що зроблено — допиши, що BT не бачить"), Cols("*,Auto,Auto", hint, copy, mark.M(6, 0, 0, 0)));
     }
 
@@ -492,7 +535,7 @@ internal sealed class DayView : Grid
                 Background = on ? B("TonalBrush") : Brushes.Transparent, Padding = new Thickness(12, 5, 12, 5),
                 CornerRadius = first ? new CornerRadius(15, 0, 0, 15) : new CornerRadius(0, 15, 15, 0),
                 BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(first ? 0 : 1, 0, 0, 0),
-                Child = T(text, 12.5, on ? "LimeBrush" : "MutedBrush", FontWeights.Medium),
+                Child = T(text, 12.5, on ? "TextBrush" : "MutedBrush", on ? FontWeights.SemiBold : FontWeights.Medium),
             };
             Clickable(b, click, "mode:" + text, text);
             return b;
@@ -502,6 +545,30 @@ internal sealed class DayView : Grid
             Seg("Хронологічно", _chrono, false, () => { _chrono = true; Render(); }));
         return new Border { BorderBrush = B("EdgeBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(16), Child = row, HorizontalAlignment = HorizontalAlignment.Left };
     }
+
+    // ---------------- undo ----------------
+
+    /// <summary>"Перенесено 34 записи · Відмінити" for 6 seconds: reversible actions run at once, no "Точно?".</summary>
+    void Snack(string text, Action undo)
+    {
+        _snackTimer?.Stop();
+        var undoBtn = Btn("Відмінити", "Quiet", () =>
+        {
+            _snackTimer?.Stop();
+            _snack.Visibility = Visibility.Collapsed;
+            undo();
+        });
+        _snack.Background = B("TextBrush");
+        var msg = T(text, 13, "GreenBrush", FontWeights.Medium);
+        undoBtn.Foreground = B("GreenBrush");
+        _snack.Child = Cols("*,Auto", msg, undoBtn);
+        _snack.Visibility = Visibility.Visible;
+        _snackTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _snackTimer.Tick += (_, _) => { _snackTimer.Stop(); _snack.Visibility = Visibility.Collapsed; };
+        _snackTimer.Start();
+    }
+
+    string Records(int n) => $"{n} {Plural(n, "запис", "записи", "записів")}";
 
     // ---------------- bulk move ----------------
 
@@ -527,7 +594,9 @@ internal sealed class DayView : Grid
         var sel = Selected();
         UpdateDay(st => { foreach (var t in sel) st.Moved[t.Key] = project; });
         _sel.Clear();
+        _anchor = null;
         OfferRule(sel, project);
+        Snack($"Перенесено {Records(sel.Count)} в {project}", () => { _ruleHint = null; UpdateDay(st => { foreach (var t in sel) st.Moved.Remove(t.Key); }); });
         Render();
     }
 
@@ -535,7 +604,15 @@ internal sealed class DayView : Grid
     {
         UpdateDay(st => st.Moved[t.Key] = project);
         OfferRule(new List<TimelineItem> { t }, project);
+        Snack($"Перенесено в {project}", () => { _ruleHint = null; UpdateDay(st => st.Moved.Remove(t.Key)); });
         Render();
+    }
+
+    void Ignore(string what, string shown)
+    {
+        var added = false;
+        UpdateSettings(s => { if (!s.Ignore.Contains(what)) { s.Ignore.Add(what); added = true; } });
+        if (added) Snack($"{shown} більше не записується", () => UpdateSettings(s => s.Ignore.Remove(what)));
     }
 
     /// <summary>
@@ -566,10 +643,12 @@ internal sealed class DayView : Grid
         var yes = Btn("Створити правило", "Primary", () =>
         {
             _ruleHint = null;
-            UpdateSettings(s => s.Rules.Add(new Rule { Match = h.Match, Project = h.Project }));
+            var rule = new Rule { Match = h.Match, Project = h.Project };
+            UpdateSettings(s => s.Rules.Add(rule));
+            Snack($"Правило створено → {h.Project}", () => UpdateSettings(s => s.Rules.RemoveAll(r => r.Match == rule.Match && r.Project == rule.Project)));
         });
         var no = Btn("Ні", "Quiet", () => { _ruleHint = null; Render(); }).M(4, 0, 0, 0);
-        return Card(Col(8, text, HRow(yes, no)), "CardHiBrush", "LimeBrush", 12).M(0, 0, 0, 8);
+        return Card(Col(8, text, HRow(yes, no)), "CardHiBrush", "EdgeBrush", 12).M(0, 0, 0, 8);
     }
 
     /// <summary>
@@ -633,8 +712,8 @@ internal sealed class DayView : Grid
             if (drawn++ == _limit) { list.Children.Add(MoreButton()); break; }
             if (t.IsSession)
             {
-                var name = HRow(new Ellipse { Width = 6, Height = 6, Fill = B("LimeBrush"), VerticalAlignment = VerticalAlignment.Center },
-                    T(t.Project ?? "", 12.5, "LimeBrush", FontWeights.Medium).M(8, 0, 0, 0), T("  у проєкті", 12, "FaintBrush"));
+                var name = HRow(new Ellipse { Width = 6, Height = 6, Fill = B("MintBrush"), VerticalAlignment = VerticalAlignment.Center },
+                    T(t.Project ?? "", 12.5, "MintBrush", FontWeights.Medium).M(8, 0, 0, 0), T("  у проєкті", 12, "FaintBrush"));
                 list.Children.Add(Cols("28,42,*,Auto", null, T(TimeUtil.Clock(t.S), 12, "FaintBrush"), name, T($"до {TimeUtil.Clock(t.E)}", 12, "FaintBrush")).M(0, 4, 0, 4));
             }
             else list.Children.Add(VisitRow(t, showApp: true));
@@ -652,7 +731,7 @@ internal sealed class DayView : Grid
         var head = Cols("*,Auto,Auto,22",
             T(a.Name, 13, a.Ms > 0 ? "TextBrush" : "MutedBrush", FontWeights.Medium),
             T($"{count} {Plural(count, "запис", "записи", "записів")}", 12, "FaintBrush").M(8, 0, 10, 0),
-            T(TimeUtil.FormatExact(a.Ms), 12.5, a.Ms > 0 ? "LimeBrush" : "FaintBrush", FontWeights.SemiBold),
+            T(TimeUtil.FormatExact(a.Ms), 12.5, a.Ms > 0 ? "TextBrush" : "FaintBrush", FontWeights.SemiBold),
             Glyph(open ? G.Up : G.Down, 10, "FaintBrush"));
         var headBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 8, 0, 8), Child = head };
         Clickable(headBox, () => { if (!_openApps.Add(a.Name)) _openApps.Remove(a.Name); Render(); }, "app:" + a.Name, $"{a.Name}, {TimeUtil.FormatExact(a.Ms)}");
@@ -687,7 +766,7 @@ internal sealed class DayView : Grid
             {
                 var proc = a.Proc;
                 foot.Children.Add(Btn($"Ігнорувати {a.Name}", "Quiet",
-                    () => UpdateSettings(s => { if (!s.Ignore.Contains(proc)) s.Ignore.Add(proc); }), $"Ніколи не записувати {a.Name}"));
+                    () => Ignore(proc, a.Name), $"Ніколи не записувати {a.Name}"));
             }
             if (foot.Children.Count > 0) list.Children.Add(foot);
             box.Children.Add(list);
@@ -700,7 +779,7 @@ internal sealed class DayView : Grid
     {
         var label = T(showApp ? $"{t.App} · {t.Label}" : t.Label, 12.5, t.Moved != null ? "MutedBrush" : "TextBrush");
         label.ToolTip = t.Label;
-        var dur = t.Moved != null ? T($"→ {t.Moved}", 12, "LimeBrush") : T(TimeUtil.FormatExact(t.Ms), 12, "MutedBrush");
+        var dur = t.Moved != null ? T($"→ {t.Moved}", 12, "MintBrush") : T(TimeUtil.FormatExact(t.Ms), 12, "MutedBrush");
         var line = Cols("42,*,Auto", T(TimeUtil.Clock(t.S), 12, "FaintBrush"), label, dur.M(8, 0, 0, 0));
         var lineBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(0, 7, 0, 7), Child = line };   // 32 px rows
         Clickable(lineBox, () => { _openVisit = _openVisit == t.Key ? null : t.Key; Render(); }, "visit:" + t.Key, t.Label);
@@ -717,7 +796,7 @@ internal sealed class DayView : Grid
                 acts.Children.Add(Picker("→ Проєкт", "Tonal", ProjectNames(), v => MoveOne(t, v)));
                 if (t.Browser)
                     acts.Children.Add(Btn("Ігнорувати сторінку", "Quiet",
-                        () => UpdateSettings(s => { if (!s.Ignore.Contains(t.Label)) s.Ignore.Add(t.Label); }),
+                        () => Ignore(t.Label, "Сторінка"),
                         $"Ніколи не записувати вкладки з «{t.Label}» у заголовку").M(6, 0, 0, 0));
             }
             col.Children.Add(acts);

@@ -19,7 +19,10 @@
         <SolidColorBrush x:Key="TextBrush" Color="#E8F0EC"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#9DB5AB"/>
         <SolidColorBrush x:Key="FaintBrush" Color="#8BA79B"/>
+        <!-- Lime means two things only: "do this" (primary action) and "time not yet in the report". -->
         <SolidColorBrush x:Key="LimeBrush" Color="#F0FC7E"/>
+        <!-- Mint: calm state (tracking runs, current project, entered, up to date). -->
+        <SolidColorBrush x:Key="MintBrush" Color="#7FE3B5"/>
         <SolidColorBrush x:Key="OrangeBrush" Color="#EF583D"/>
         <SolidColorBrush x:Key="GreenBrush" Color="#003B29"/>
 
