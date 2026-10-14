@@ -42,6 +42,9 @@ public partial class App : Application
         catch (AbandonedMutexException) { owned = true; }
         if (!owned) { _single = null; Shutdown(); return; }
         Updates.Cleanup(Updater.AppDir, Updater.DownloadDir);
+        // This build ships no language folders: leftovers from older versions go at start
+        // (an update is applied by the previous version's code, which did not know to remove them).
+        try { Updates.RemoveDroppedLanguages(Updater.AppDir, new UpdateManifest()); } catch { /* best effort */ }
 
         DispatcherUnhandledException += (_, ex) =>
         {
