@@ -198,12 +198,14 @@ internal sealed class Widget : Window
         var dot = new Ellipse { Width = 8, Height = 8, Fill = B(state.Brush), VerticalAlignment = VerticalAlignment.Center };
         var name = T(state.Text, 13, state.Kind == "run" && _current != null ? "TextBrush" : "MutedBrush", FontWeights.Medium).M(8, 0, 8, 0);
         var mine = state.Kind == "run" && _current != null ? T(TimeUtil.FormatExact(ProjectMs() * TimeUtil.Min), 12.5, "MutedBrush", ellipsis: false) : null;
-        // "Open BT" sits in the top-right corner, where windows keep their expand control, in its own outlined
-        // circle: next to the action buttons a bare icon read as part of "Завершити".
-        var open = IconBtn(G.Open, () => App.Instance.ShowApp(AppPage.Today), "Відкрити Bison Time Checker", 13);
-        open.Width = open.Height = 30;
-        open.BorderBrush = B("EdgeBrush");
-        open.Margin = new Thickness(10, -4, -4, -4);
+        // "Розгорнути" is labelled, not a bare icon (an icon alone got lost), and as quiet as "Завершити":
+        // the same outline, smaller. Its right edge is the card's content edge, like the buttons below.
+        var open = IconText(G.Open, "Розгорнути", "Ghost", () => App.Instance.ShowApp(AppPage.Today), "Відкрити Bison Time Checker");
+        open.MinHeight = 28;
+        open.Padding = new Thickness(12, 3, 12, 3);
+        open.FontSize = 12.5;
+        open.Margin = new Thickness(10, -2, 0, -2);
+        open.VerticalAlignment = VerticalAlignment.Center;
         _body.Children.Add(Cols("Auto,*,Auto,Auto", dot, name, mine, open));
 
         // 2. The day's total for the report, and what of it is still to enter.
@@ -218,15 +220,13 @@ internal sealed class Widget : Window
         _body.Children.Add(Cols("Auto,*,Auto", total, null, fact).M(0, 8, 0, 0));
 
         // 3. Actions. The same ones are in the tray menu and the day window: nothing lives only here.
+        // Two equal halves that span the card: both outer edges line up with the text and "Розгорнути" above.
+        var finish = IconText(G.Stop, "Завершити", "Ghost", () => App.Instance.FinishDay(), "Облік зупиниться до 05:00 і ввімкнеться сам");
         UIElement main = state.Kind switch
         {
             "done" => IconText(G.Play, "Продовжити облік", "Primary", () => App.Instance.Resume(), "Повернутися до обліку зараз"),
-            "pause" => HRow(
-                IconText(G.Play, "Продовжити", "Primary", () => App.Instance.TogglePause(), "Alt+Shift+P"),
-                IconText(G.Stop, "Завершити", "Ghost", () => App.Instance.FinishDay(), "Облік зупиниться до 05:00 і ввімкнеться сам").M(8, 0, 0, 0)),
-            _ => HRow(
-                IconText(G.Pause, "Пауза", "Tonal", () => App.Instance.TogglePause(), "Пауза (Alt+Shift+P)"),
-                IconText(G.Stop, "Завершити", "Ghost", () => App.Instance.FinishDay(), "Облік зупиниться до 05:00 і ввімкнеться сам").M(8, 0, 0, 0)),
+            "pause" => Cols("*,8,*", IconText(G.Play, "Продовжити", "Primary", () => App.Instance.TogglePause(), "Alt+Shift+P"), null, finish),
+            _ => Cols("*,8,*", IconText(G.Pause, "Пауза", "Tonal", () => App.Instance.TogglePause(), "Пауза (Alt+Shift+P)"), null, finish),
         };
         _body.Children.Add(((FrameworkElement)main).M(0, 12, 0, 0));
     }
