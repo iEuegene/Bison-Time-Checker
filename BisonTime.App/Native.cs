@@ -29,6 +29,35 @@ internal static class Native
         return unchecked((uint)Environment.TickCount - info.dwTime);
     }
 
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+    [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hWnd, StringBuilder name, int count);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+    [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] struct MONITORINFO { public int cbSize; public RECT Monitor, Work; public uint Flags; }
+
+    /// <summary>
+    /// A video, a presentation or a game owns the whole screen: the foreground window covers its monitor
+    /// and has no title bar. A merely maximised window keeps its title bar, so it does not count.
+    /// </summary>
+    public static bool FullscreenForeground()
+    {
+        var hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) return false;
+        var cls = new StringBuilder(64);
+        GetClassName(hwnd, cls, cls.Capacity);
+        if (cls.ToString() is "Progman" or "WorkerW" or "Shell_TrayWnd") return false;   // the desktop itself
+        const int WS_CAPTION = 0x00C00000;
+        if ((GetWindowLong(hwnd, -16) & WS_CAPTION) == WS_CAPTION) return false;
+        if (!GetWindowRect(hwnd, out var r)) return false;
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(MonitorFromWindow(hwnd, 2 /* nearest */), ref info)) return false;
+        var m = info.Monitor;
+        return r.Left <= m.Left && r.Top <= m.Top && r.Right >= m.Right && r.Bottom >= m.Bottom;
+    }
+
     public static string WindowTitle(IntPtr hWnd)
     {
         var len = GetWindowTextLength(hWnd);

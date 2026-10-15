@@ -341,6 +341,7 @@ internal sealed class AppWindow : Window
         var auto = Toggle(_s.Autostart, on => { Save(s => s.Autostart = on); Autostart.Apply(on); });
         var upd = Toggle(_s.AutoUpdateCheck, on => Save(s => s.AutoUpdateCheck = on));
         var urls = Toggle(_s.ReadUrls, on => Save(s => s.ReadUrls = on));
+        var widget = Toggle(_s.Widget, on => { Save(s => s.Widget = on); App.Instance.UpdateWidget(); });
 
         UIElement Field(string title, string help, FrameworkElement control)
         {
@@ -351,6 +352,7 @@ internal sealed class AppWindow : Window
         {
             Field("Простій", "Якщо стільки хвилин не торкаєшся миші й клавіатури, облік зупиняється, а потім BT питає, чи додати цей час. Хвилини до зупинки зараховуються. Під час дзвінка в Meet, Zoom чи Teams облік не зупиняється.", idle),
             Field("Округлення", "Округлюється тільки підсумок проєкту за день, як у формі звіту. Рядки показують точний час.", steps),
+            Field("Віджет угорі екрана", "Тонка смужка біля верхнього краю: колір показує, чи йде облік, довжина — скільки вже набралося з 8 годин. Наведи на неї курсор, і вона розгорнеться: поточний проєкт, час за день, пауза й завершення. Тягни її вздовж краю, щоб поставити, де зручно.", widget),
             Field("Запускати з Windows", "BT тихо з'являється в треї, щойно ти входиш у Windows.", auto),
             Field("Читати адресу вкладки", "Коли в заголовку вкладки немає проєкту, BT дивиться в адресний рядок Chrome, Edge, Brave, Opera чи Vivaldi. Зберігається лише домен, адреса сторінки — ні.", urls),
             Field("Перевіряти оновлення щодня", "Раз на день BT дивиться на GitHub, чи вийшла нова версія, і повідомляє в треї. Встановиться вона, лише коли ти натиснеш «Оновити».", upd),

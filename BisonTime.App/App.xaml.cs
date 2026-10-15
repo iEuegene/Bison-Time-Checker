@@ -20,6 +20,7 @@ public partial class App : Application
     System.Drawing.Icon _iconNormal = null!, _iconPaused = null!, _iconDone = null!;
     MainWindow? _main;
     AppWindow? _app;
+    Widget? _widget;
     long _lastStats;
     readonly WindowWatcher _watcher = new();
     DispatcherTimer _timer = null!;
@@ -89,6 +90,7 @@ public partial class App : Application
         try { w = _watcher.Sample(s.ReadUrls); } catch { /* a window vanished mid-read */ }
         Tracker.Tick(w, idle, _locked);
         UpdateTray();
+        UpdateWidget();
 
         var now = Environment.TickCount64;
         if (now - _lastStats > 10 * 60_000L)
@@ -238,6 +240,7 @@ public partial class App : Application
         if (Tracker.Paused) Tracker.Resume(); else Tracker.Pause();
         Sample();
         _main?.Refresh();
+        _widget?.Refresh();
     }
 
     /// <summary>"Завершити роботу": no counting until 05:00, the day's numbers saved for the dashboard.</summary>
@@ -247,6 +250,7 @@ public partial class App : Application
         SaveStats(all: false);
         Sample();
         _main?.Refresh();
+        _widget?.Refresh();
     }
 
     public void Resume()
@@ -254,6 +258,26 @@ public partial class App : Application
         Tracker.Resume();
         Sample();
         _main?.Refresh();
+        _widget?.Refresh();
+    }
+
+    /// <summary>Show the top-edge widget when it is switched on and nothing runs full screen; feed it the second's tick.</summary>
+    internal void UpdateWidget()
+    {
+        var want = Store.LoadSettings().Widget && !Native.FullscreenForeground();
+        if (!want)
+        {
+            _widget?.Hide();
+            return;
+        }
+        if (_widget == null)
+        {
+            _widget = new Widget();
+            _widget.Show();
+            return;
+        }
+        if (!_widget.IsVisible) { _widget.Show(); _widget.Place(); }
+        _widget.Tick();
     }
 
     // ---- Global hotkey Alt+Shift+P (RegisterHotKey, no keyboard hook) ----

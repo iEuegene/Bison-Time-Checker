@@ -46,6 +46,11 @@ public sealed class Settings
     public bool AutoUpdateCheck { get; set; } = true;
     /// <summary>Read the browser's address bar (domains only) when the title names no project.</summary>
     public bool ReadUrls { get; set; } = true;
+    /// <summary>The strip at the top of the screen that slides out into a small card under the pointer.</summary>
+    public bool Widget { get; set; } = true;
+    /// <summary>Where the widget sits: its centre x and the top of its monitor, in screen pixels (null = default spot).</summary>
+    public int? WidgetX { get; set; }
+    public int? WidgetY { get; set; }
     /// <summary>Unix ms of the last automatic check.</summary>
     public long LastUpdateCheck { get; set; }
 }
