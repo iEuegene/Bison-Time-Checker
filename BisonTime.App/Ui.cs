@@ -103,7 +103,7 @@ internal static class Ui
         public const string Today = "\uE823", Dashboard = "\uE9D2", Projects = "\uE8B7", Rules = "\uE71C", Tracking = "\uE916",
             Help = "\uE897", Info = "\uE946", Pause = "\uE769", Stop = "\uE71A", Play = "\uE768", Copy = "\uE8C8",
             Left = "\uE76B", Right = "\uE76C", Up = "\uE70E", Down = "\uE70D", Add = "\uE710", Update = "\uE895",
-            Settings = "\uE713", Check = "\uE73E";
+            Settings = "\uE713", Check = "\uE73E", Open = "\uE8A7";
     }
 
     /// <summary>Round icon-only button (M3 standard icon button).</summary>

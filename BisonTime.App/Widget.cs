@@ -35,6 +35,7 @@ internal sealed class Widget : Window
     long _lastBuild;
     DayReport? _report;
     string? _current;
+    string? _app;   // program in front when it belongs to no project: "Інше · Telegram" says more than "Інше"
     string _state = "";
 
     public Widget()
@@ -151,6 +152,7 @@ internal sealed class Widget : Window
             {
                 _report = Report.Build(App.Tracker.DaySegments(day), App.Store.LoadDay(day).State, s);
                 _current = App.Tracker.Open is { } o ? Classifier.Classify(new WindowInfo(o.Proc, o.Title, o.Url), s).Project : null;
+                _app = App.Tracker.Open is { } a ? Classifier.AppName(a.Proc) : null;
             }
             catch { /* keep the last numbers */ }
         }
@@ -173,7 +175,7 @@ internal sealed class Widget : Window
         var idle = Native.IdleMs();
         if (idle >= Math.Max(1, App.Store.LoadSettings().IdleMin) * 60_000L)
             return ("FaintBrush", $"Простій · {TimeUtil.FormatExact(idle)}", "idle");
-        return ("MintBrush", _current ?? "Інше", "run");
+        return ("MintBrush", _current ?? (_app != null ? $"Інше · {_app}" : "Інше"), "run");
     }
 
     int Pending() => _report?.Projects.Sum(p => p.Done.Marked ? 0 : p.Done.Stale ? Math.Max(0, p.Done.Diff) : p.Rounded) ?? 0;
@@ -215,12 +217,12 @@ internal sealed class Widget : Window
             "done" => IconText(G.Play, "Продовжити облік", "Primary", () => App.Instance.Resume(), "Повернутися до обліку зараз"),
             "pause" => HRow(
                 IconText(G.Play, "Продовжити", "Primary", () => App.Instance.TogglePause(), "Alt+Shift+P"),
-                IconText(G.Stop, "Завершити", "Ghost", () => App.Instance.FinishDay(), "Облік зупиниться до 05:00 і ввімкнеться сам").M(8, 0, 0, 0)),
+                IconText(G.Stop, "Завершити", "Quiet", () => App.Instance.FinishDay(), "Облік зупиниться до 05:00 і ввімкнеться сам").M(8, 0, 0, 0)),
             _ => HRow(
                 IconText(G.Pause, "Пауза", "Tonal", () => App.Instance.TogglePause(), "Пауза (Alt+Shift+P)"),
-                IconText(G.Stop, "Завершити", "Ghost", () => App.Instance.FinishDay(), "Облік зупиниться до 05:00 і ввімкнеться сам").M(8, 0, 0, 0)),
+                IconText(G.Stop, "Завершити", "Quiet", () => App.Instance.FinishDay(), "Облік зупиниться до 05:00 і ввімкнеться сам").M(8, 0, 0, 0)),
         };
-        var open = IconBtn(G.Today, () => App.Instance.ShowApp(AppPage.Today), "Відкрити Bison Time Checker");
+        var open = IconBtn(G.Open, () => App.Instance.ShowApp(AppPage.Today), "Відкрити Bison Time Checker");
         _body.Children.Add(Cols("*,Auto", main, open).M(0, 12, 0, 0));
     }
 
